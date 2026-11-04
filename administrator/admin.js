@@ -202,11 +202,16 @@
   }).join('') + '<button class="botao-texto" type="button" data-atalho="">+ Outro tamanho</button><button class="botao-texto" type="button" data-nova-cor>+ Cor</button>';
 
   var COR_PADRAO = '#d6d1c6';
+  var PALETA = [['Preto', '#111111'], ['Branco', '#ffffff'], ['Off-white', '#f3eee3'], ['Cinza', '#8c8c8c'], ['Bege', '#d9c2a3'], ['Nude', '#e3bfa6'],
+    ['Caramelo', '#b5722f'], ['Marrom', '#5e3a22'], ['Vinho', '#6e1423'], ['Vermelho', '#c8102e'], ['Laranja', '#e8741e'], ['Mostarda', '#c8960c'],
+    ['Amarelo', '#f4cf2e'], ['Verde claro', '#9ccc8a'], ['Verde', '#2f7d4f'], ['Verde militar', '#4b5320'], ['Azul claro', '#8cc0e8'], ['Azul', '#1f5fbf'],
+    ['Azul marinho', '#14264f'], ['Lilás', '#c3a6e0'], ['Roxo', '#5f2c91'], ['Rosa claro', '#f4c2d0'], ['Rosa', '#e0709a'], ['Pink', '#e0218a'],
+    ['Dourado', '#c9a227'], ['Prateado', '#c0c0c8'], ['Estampado', '#b9a89a']];
+  var corEscolhendo = -1;
   var grade = { cores: [], tamanhos: [], q: [] };
 
   function lerGrade() {
     document.querySelectorAll('#grade .c-nome').forEach(function (campo, i) { grade.cores[i].name = campo.value; });
-    document.querySelectorAll('#grade .c-hex').forEach(function (campo, i) { grade.cores[i].hex = campo.value; });
     document.querySelectorAll('#grade .t-nome').forEach(function (campo, i) { grade.tamanhos[i] = campo.value; });
     document.querySelectorAll('#grade .q').forEach(function (campo) {
       grade.q[+campo.dataset.c][+campo.dataset.t] = campo.value === '' ? 0 : Number(campo.value);
@@ -221,14 +226,47 @@
       return '<tr><td><div class="grade-cor"><label class="c-foto" title="Foto desta cor">' +
         (previa ? '<img src="' + esc(previa) + '" alt="" width="42" height="42">' : '<span>Foto</span>') +
         '<input type="file" accept="image/jpeg,image/png,image/webp" data-foto-cor="' + ci + '" aria-label="Foto da cor ' + esc(c.name) + '"></label>' +
-        '<input class="c-hex" type="color" value="' + esc(c.hex) + '" aria-label="Tom da cor">' +
-        '<input class="c-nome" maxlength="30" value="' + esc(c.name) + '" placeholder="Azul" aria-label="Nome da cor"></div></td>' +
+        '<button class="c-amostra" type="button" data-paleta="' + ci + '" style="background:' + (/^#[0-9a-f]{6}$/i.test(c.hex || '') ? c.hex : COR_PADRAO) + '" aria-label="Escolher cor">' +
+        '</button>' +
+        '<input class="c-nome" maxlength="30" value="' + esc(c.name) + '" placeholder="Nome da cor" aria-label="Nome da cor"></div></td>' +
         grade.tamanhos.map(function (t, ti) {
           return '<td><input class="q" type="number" min="0" max="9999" step="1" value="' + esc(grade.q[ci][ti]) + '" data-c="' + ci + '" data-t="' + ti + '" aria-label="Estoque da cor ' + esc(c.name) + ', tamanho ' + esc(t) + '"></td>';
         }).join('') +
         '<td><button class="fechar" type="button" data-tirar-cor="' + ci + '" aria-label="Remover cor ' + esc(c.name) + '">×</button></td></tr>';
     }).join('') + '</tbody></table>';
   }
+  $('#paleta-opcoes').innerHTML = PALETA.map(function (c, i) {
+    return '<button type="button" data-cor-paleta="' + i + '"><i style="background:' + c[1] + '"></i>' + c[0] + '</button>';
+  }).join('');
+  function abrirPaleta(indice) {
+    corEscolhendo = indice;
+    $('#paleta').hidden = false;
+    $('#paleta').scrollIntoView({ block: 'nearest' });
+  }
+  function fecharPaleta() {
+    corEscolhendo = -1;
+    $('#paleta').hidden = true;
+  }
+  $('#paleta').addEventListener('click', function (evento) {
+    var opcao = evento.target.closest('[data-cor-paleta]');
+    if (evento.target.closest('[data-fechar-paleta]')) { fecharPaleta(); return; }
+    if (!opcao || corEscolhendo < 0) return;
+    lerGrade();
+    var escolhida = PALETA[+opcao.dataset.corPaleta];
+    grade.cores[corEscolhendo].name = escolhida[0];
+    grade.cores[corEscolhendo].hex = escolhida[1];
+    desenharGrade();
+    fecharPaleta();
+  });
+  $('#grade').addEventListener('input', function (evento) {
+    if (!evento.target.classList.contains('c-nome')) return;
+    var nome = evento.target.value.trim().toLowerCase();
+    var achada = PALETA.filter(function (c) { return c[0].toLowerCase() === nome; })[0];
+    var linha = [].indexOf.call(document.querySelectorAll('#grade .c-nome'), evento.target);
+    if (!achada) return;
+    grade.cores[linha].hex = achada[1];
+    document.querySelectorAll('#grade .c-amostra')[linha].style.background = achada[1];
+  });
   function adicionarTamanho(nome) {
     lerGrade();
     if (nome && grade.tamanhos.indexOf(nome) !== -1) return;
@@ -246,9 +284,12 @@
     desenharGrade();
   });
   $('#grade').addEventListener('click', function (evento) {
+    var amostra = evento.target.closest('[data-paleta]');
+    if (amostra) { abrirPaleta(+amostra.dataset.paleta); return; }
     var cor = evento.target.closest('[data-tirar-cor]');
     var tamanho = evento.target.closest('[data-tirar-tamanho]');
     if (!cor && !tamanho) return;
+    fecharPaleta();
     lerGrade();
     if (cor) {
       grade.cores.splice(+cor.dataset.tirarCor, 1);
@@ -265,11 +306,10 @@
     if (botao) { adicionarTamanho(botao.dataset.atalho); return; }
     if (evento.target.closest('[data-nova-cor]')) {
       lerGrade();
-      grade.cores.push({ name: '', hex: '#7a1218' });
+      grade.cores.push({ name: '', hex: COR_PADRAO });
       grade.q.push(grade.tamanhos.map(function () { return 0; }));
       desenharGrade();
-      var nomes = document.querySelectorAll('#grade .c-nome');
-      nomes[nomes.length - 1].focus();
+      abrirPaleta(grade.cores.length - 1);
     }
   });
   function abrirEditor(p) {
@@ -297,6 +337,7 @@
       grade = { cores: [{ name: 'Única', hex: COR_PADRAO }], tamanhos: ['P', 'M', 'G'], q: [[0, 0, 0]] };
     }
     desenharGrade();
+    fecharPaleta();
     editor.showModal();
   }
   $('#novo').addEventListener('click', function () { abrirEditor(null); });

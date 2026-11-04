@@ -114,8 +114,12 @@
         </fieldset>
         <fieldset class="grupo">
           <legend>Estoque por cor e tamanho</legend>
-          <p class="dica">Para peça sem variação de cor, mantenha a linha "Única". A foto de cada cor aparece na loja quando o cliente seleciona a cor.</p>
+          <p class="dica">Para peça sem variação de cor, mantenha a linha "Única". Clique na bolinha para escolher a cor. Se precisar de outro nome, como "Azul royal", digite no campo ao lado. A foto de cada cor aparece na loja quando o cliente a seleciona.</p>
           <div class="grade-rolagem" id="grade"></div>
+          <div class="paleta" id="paleta" hidden>
+            <div class="paleta-topo"><span>Escolha a cor</span><button class="botao-texto" type="button" data-fechar-paleta>Fechar</button></div>
+            <div class="paleta-opcoes" id="paleta-opcoes"></div>
+          </div>
           <div class="atalhos" id="atalhos"></div>
         </fieldset>
         <label class="marca-linha"><input name="ativo" type="checkbox" checked> Visível na loja</label>
