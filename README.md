@@ -24,6 +24,8 @@ Depois abra http://localhost:4173.
 
 Os painéis usam texturas de cetim (`cetim-*.webp`). Para usar fotos da loja, troque o `src` da imagem no painel em `index.html` e descreva a foto no `alt`.
 
-## Ao definir o domínio
+## Publicação
 
-Adicione a tag `canonical` e `og:url`, e troque `og:image` por uma URL absoluta.
+O site está no GitHub Pages: https://patrickvca.github.io/ellize-collection/
+
+Ao trocar de domínio, atualize `canonical`, `og:url`, `og:image` e os dados estruturados em `index.html`.
