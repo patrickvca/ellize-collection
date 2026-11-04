@@ -21,8 +21,14 @@
   }
 
   function preco(p) { return p.promo_price_cents || p.price_cents; }
-  function estoque(p, tamanho) { return Number((p.stock || {})[tamanho]) || 0; }
-  function esgotado(p) { return !p.sizes.some(function (t) { return estoque(p, t) > 0; }); }
+  function cores(p) { return p.colors && p.colors.length ? p.colors : [{ name: 'Única' }]; }
+  function temCores(p) { var c = cores(p); return c.length > 1 || c[0].name !== 'Única'; }
+  function estoque(p, cor, tamanho) { return Number(((p.stock || {})[cor] || {})[tamanho]) || 0; }
+  function estoqueCor(p, cor) { return p.sizes.reduce(function (soma, t) { return soma + estoque(p, cor, t); }, 0); }
+  function estoqueTamanho(p, tamanho) { return cores(p).reduce(function (soma, c) { return soma + estoque(p, c.name, tamanho); }, 0); }
+  function esgotado(p) { return !cores(p).some(function (c) { return estoqueCor(p, c.name) > 0; }); }
+  function corHex(c) { return /^#[0-9a-f]{6}$/i.test(c.hex || '') ? c.hex : '#d6d1c6'; }
+  function variacao(cor, tamanho) { return (cor && cor !== 'Única' ? 'Cor ' + esc(cor) + ' · ' : '') + 'Tamanho ' + esc(tamanho); }
   function precoHTML(p) {
     return p.promo_price_cents
       ? '<s class="preco-antigo">' + dinheiro(p.price_cents) + '</s> <span class="preco-promo">' + dinheiro(p.promo_price_cents) + '</span>'
@@ -33,7 +39,7 @@
   var catalogo = null;
   function produtos() {
     if (!catalogo) {
-      catalogo = fetch(CONFIG.url + '/rest/v1/products?select=id,slug,name,price_cents,promo_price_cents,stock,image,sizes,tags,is_sample&order=created_at.desc&limit=200', {
+      catalogo = fetch(CONFIG.url + '/rest/v1/products?select=id,slug,name,price_cents,promo_price_cents,stock,colors,image,sizes,tags,is_sample&order=created_at.desc&limit=200', {
         headers: { apikey: CONFIG.chave }
       }).then(function (resposta) {
         if (!resposta.ok) throw new Error('catalogo');
@@ -145,11 +151,11 @@
       carrinho.atualizarSelo();
       document.dispatchEvent(new CustomEvent('ellize:sacola'));
     },
-    adicionar: function (id, tamanho, quantidade, limite) {
+    adicionar: function (id, cor, tamanho, quantidade, limite) {
       var itens = carrinho.ler();
-      var item = itens.find(function (i) { return i.id === id && i.size === tamanho; });
+      var item = itens.find(function (i) { return i.id === id && i.color === cor && i.size === tamanho; });
       if (item) item.qty = Math.min(limite || 10, 10, item.qty + quantidade);
-      else itens.push({ id: id, size: tamanho, qty: quantidade });
+      else itens.push({ id: id, color: cor, size: tamanho, qty: quantidade });
       carrinho.salvar(itens);
     },
     atualizarSelo: function () {
@@ -178,9 +184,9 @@
   var sacolaRodape = document.getElementById('sacola-rodape');
   var sacolaTitulo = document.getElementById('sacola-titulo');
 
-  function linhaHTML(p, tamanho) {
+  function linhaHTML(p, cor, tamanho) {
     return '<a href="produto.html?p=' + encodeURIComponent(p.slug) + '">' + esc(p.name) + '</a>' +
-      '<span>Tamanho ' + esc(tamanho) + '</span><span>' + precoHTML(p) + '</span>';
+      '<span>' + variacao(cor, tamanho) + '</span><span>' + precoHTML(p) + '</span>';
   }
   function desenharLista() {
     sacolaTitulo.textContent = 'Sacola';
@@ -192,9 +198,9 @@
       var itens = carrinho.ler();
       var antes = JSON.stringify(itens);
       var validos = itens.filter(function (i) {
-        return mapa[i.id] && mapa[i.id].sizes.indexOf(i.size) !== -1 && estoque(mapa[i.id], i.size) > 0;
+        return mapa[i.id] && estoque(mapa[i.id], i.color, i.size) > 0;
       });
-      validos.forEach(function (i) { i.qty = Math.min(i.qty, estoque(mapa[i.id], i.size)); });
+      validos.forEach(function (i) { i.qty = Math.min(i.qty, estoque(mapa[i.id], i.color, i.size)); });
       if (JSON.stringify(validos) !== antes) carrinho.salvar(validos);
       if (!validos.length) {
         sacolaCorpo.innerHTML = '<div class="estado"><h2>Sua sacola está vazia</h2><p>Escolha suas peças nas novidades.</p><a class="botao botao-vinho" href="loja.html">Ver novidades</a></div>';
@@ -203,11 +209,11 @@
       var total = validos.reduce(function (soma, i) { return soma + i.qty * preco(mapa[i.id]); }, 0);
       sacolaCorpo.innerHTML = '<ul class="linhas">' + validos.map(function (i, n) {
         var p = mapa[i.id];
-        return '<li class="linha"><img src="' + esc(p.image) + '" alt="" width="72" height="90"><div class="linha-info">' + linhaHTML(p, i.size) + '</div>' +
+        return '<li class="linha"><img src="' + esc(p.image) + '" alt="" width="72" height="90"><div class="linha-info">' + linhaHTML(p, i.color, i.size) + '</div>' +
           '<div class="linha-acoes"><div class="passo">' +
           '<button type="button" data-acao="menos" data-n="' + n + '" aria-label="Diminuir quantidade de ' + esc(p.name) + '"' + (i.qty <= 1 ? ' disabled' : '') + '>−</button>' +
           '<span aria-live="polite">' + i.qty + '</span>' +
-          '<button type="button" data-acao="mais" data-n="' + n + '" aria-label="Aumentar quantidade de ' + esc(p.name) + '"' + (i.qty >= Math.min(10, estoque(p, i.size)) ? ' disabled' : '') + '>+</button></div>' +
+          '<button type="button" data-acao="mais" data-n="' + n + '" aria-label="Aumentar quantidade de ' + esc(p.name) + '"' + (i.qty >= Math.min(10, estoque(p, i.color, i.size)) ? ' disabled' : '') + '>+</button></div>' +
           '<button class="botao-icone" type="button" data-acao="remover" data-n="' + n + '" aria-label="Remover ' + esc(p.name) + '">' + icone('i-lixo', true) + '</button></div></li>';
       }).join('') + '</ul>';
       sacolaRodape.innerHTML = '<p class="sacola-valor"><span>Subtotal</span><strong>' + dinheiro(total) + '</strong></p>' +
@@ -222,11 +228,11 @@
     fecharTudo();
     if (!sacola.open) sacola.showModal();
   }
-  function adicionar(p, tamanho) {
-    carrinho.adicionar(p.id, tamanho, 1, estoque(p, tamanho));
+  function adicionar(p, cor, tamanho) {
+    carrinho.adicionar(p.id, cor, tamanho, 1, estoque(p, cor, tamanho));
     abrirSacola();
     sacolaTitulo.textContent = 'Produto adicionado à sacola';
-    sacolaCorpo.innerHTML = '<div class="linha"><img src="' + esc(p.image) + '" alt="" width="72" height="90"><div class="linha-info">' + linhaHTML(p, tamanho) + '</div></div>' +
+    sacolaCorpo.innerHTML = '<div class="linha"><img src="' + esc(p.image) + '" alt="" width="72" height="90"><div class="linha-info">' + linhaHTML(p, cor, tamanho) + '</div></div>' +
       '<div class="sacola-sugestao" id="sacola-sugestao" hidden><h3>Você pode gostar</h3></div>';
     sacolaRodape.innerHTML = '<button class="botao botao-vinho botao-largo" type="button" data-ver-sacola>Ver sacola</button>';
     produtos().then(function (todos) {
@@ -258,7 +264,8 @@
   window.Ellize = {
     config: CONFIG, esc: esc, dinheiro: dinheiro, icone: icone,
     produtos: produtos, sugestoes: sugestoes, adicionar: adicionar,
-    preco: preco, estoque: estoque, esgotado: esgotado, precoHTML: precoHTML
+    preco: preco, estoque: estoque, esgotado: esgotado, precoHTML: precoHTML,
+    cores: cores, temCores: temCores, estoqueCor: estoqueCor, estoqueTamanho: estoqueTamanho, corHex: corHex, variacao: variacao
   };
 
   /* Menu e submenus */

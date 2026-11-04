@@ -6,6 +6,7 @@
   );
   var CATEGORIAS = [['feminino', 'Feminino'], ['masculino', 'Masculino'], ['conjuntos', 'Conjuntos'], ['vestidos', 'Vestidos'], ['bolsas', 'Bolsas']];
   var ATALHOS = ['PP', 'P', 'M', 'G', 'GG', 'Único'];
+  var PAGAMENTOS = { pix: 'Pix', dinheiro: 'Dinheiro', debito: 'Cartão de débito', credito: 'Cartão de crédito', transferencia: 'Transferência', outro: 'Outro', nao_informado: 'Não informado' };
   var STATUS_FINALIZADO = [['pago', 'Pago'], ['enviado', 'Enviado'], ['entregue', 'Entregue'], ['cancelado', 'Cancelado']];
   var BUCKET = 'produtos';
   var FOTO_PADRAO = 'assets/img/cetim-marfim.webp';
@@ -24,9 +25,13 @@
     });
   }
   function fotoSrc(caminho) { return /^https?:/.test(caminho) ? caminho : '../' + caminho; }
+  function qtd(p, cor, tamanho) { return Number((p.stock[cor] || {})[tamanho]) || 0; }
   function total(p) {
-    return p.sizes.reduce(function (soma, t) { return soma + (Number(p.stock[t]) || 0); }, 0);
+    return p.colors.reduce(function (soma, c) {
+      return soma + p.sizes.reduce(function (s, t) { return s + qtd(p, c.name, t); }, 0);
+    }, 0);
   }
+  function variacaoItem(i) { return (i.color && i.color !== 'Única' ? esc(i.color) + ', ' : '') + esc(i.size); }
   function avisar(texto) {
     var caixa = $('#aviso');
     caixa.textContent = texto;
@@ -97,8 +102,10 @@
     botao.addEventListener('click', function () {
       document.querySelectorAll('[data-aba]').forEach(function (b) { b.removeAttribute('aria-current'); });
       botao.setAttribute('aria-current', 'page');
-      $('#aba-produtos').hidden = botao.dataset.aba !== 'produtos';
-      $('#aba-pedidos').hidden = botao.dataset.aba !== 'pedidos';
+      ['produtos', 'pedidos', 'relatorios'].forEach(function (aba) {
+        $('#aba-' + aba).hidden = botao.dataset.aba !== aba;
+      });
+      if (botao.dataset.aba === 'relatorios') carregarRelatorio();
     });
   });
 
@@ -138,9 +145,12 @@
       var preco = p.promo_price_cents
         ? '<s>' + dinheiro(p.price_cents) + '</s> <strong>' + dinheiro(p.promo_price_cents) + '</strong>'
         : '<strong>' + dinheiro(p.price_cents) + '</strong>';
-      var estoque = p.sizes.map(function (t) {
-        var q = Number(p.stock[t]) || 0;
-        return '<span class="chip' + (q === 0 ? ' chip-zero' : q <= 2 ? ' chip-baixo' : '') + '">' + esc(t) + ': ' + q + '</span>';
+      var estoque = p.colors.map(function (c) {
+        return '<div class="estoque-cor">' + (c.name !== 'Única' ? '<span class="cor-rotulo"><i style="background:' + (/^#[0-9a-f]{6}$/i.test(c.hex || '') ? c.hex : '#d6d1c6') + '"></i>' + esc(c.name) + '</span>' : '') +
+          p.sizes.map(function (t) {
+            var q = qtd(p, c.name, t);
+            return '<span class="chip' + (q === 0 ? ' chip-zero' : q <= 2 ? ' chip-baixo' : '') + '">' + esc(t) + ': ' + q + '</span>';
+          }).join('') + '</div>';
       }).join('');
       return '<li class="item"><img src="' + esc(fotoSrc(p.image)) + '" alt="" width="64" height="80" loading="lazy">' +
         '<div class="item-info"><h3>' + esc(p.name) + '</h3><p class="item-preco">' + preco + '</p></div>' +
@@ -187,24 +197,65 @@
   }).join('');
   $('#atalhos').innerHTML = ATALHOS.map(function (t) {
     return '<button class="botao-texto" type="button" data-atalho="' + t + '">+ ' + t + '</button>';
-  }).join('') + '<button class="botao-texto" type="button" data-atalho="">+ Outro</button>';
+  }).join('') + '<button class="botao-texto" type="button" data-atalho="">+ Outro tamanho</button><button class="botao-texto" type="button" data-nova-cor>+ Cor</button>';
 
-  function linhaTamanho(tamanho, quantidade) {
-    $('#tamanhos').insertAdjacentHTML('beforeend',
-      '<div class="tamanho-linha"><label>Tamanho<input class="t-nome" maxlength="12" value="' + esc(tamanho) + '"></label>' +
-      '<label>Estoque<input class="t-qtd" type="number" min="0" max="9999" step="1" value="' + esc(quantidade) + '"></label>' +
-      '<button class="fechar" type="button" data-tirar aria-label="Remover tamanho">×</button></div>');
+  var COR_PADRAO = '#d6d1c6';
+  var grade = { cores: [], tamanhos: [], q: [] };
+
+  function lerGrade() {
+    document.querySelectorAll('#grade .c-nome').forEach(function (campo, i) { grade.cores[i].name = campo.value; });
+    document.querySelectorAll('#grade .c-hex').forEach(function (campo, i) { grade.cores[i].hex = campo.value; });
+    document.querySelectorAll('#grade .t-nome').forEach(function (campo, i) { grade.tamanhos[i] = campo.value; });
+    document.querySelectorAll('#grade .q').forEach(function (campo) {
+      grade.q[+campo.dataset.c][+campo.dataset.t] = campo.value === '' ? 0 : Number(campo.value);
+    });
   }
-  $('#tamanhos').addEventListener('click', function (evento) {
-    var botao = evento.target.closest('[data-tirar]');
-    if (botao) botao.parentElement.remove();
+  function desenharGrade() {
+    $('#grade').innerHTML = '<table class="grade"><thead><tr><th>Cor</th>' + grade.tamanhos.map(function (t, ti) {
+      return '<th><button class="grade-tirar" type="button" data-tirar-tamanho="' + ti + '" aria-label="Remover tamanho ' + esc(t) + '">remover</button>' +
+        '<input class="t-nome" maxlength="12" value="' + esc(t) + '" aria-label="Nome do tamanho"></th>';
+    }).join('') + '<th></th></tr></thead><tbody>' + grade.cores.map(function (c, ci) {
+      return '<tr><td><div class="grade-cor"><input class="c-hex" type="color" value="' + esc(c.hex) + '" aria-label="Tom da cor">' +
+        '<input class="c-nome" maxlength="30" value="' + esc(c.name) + '" placeholder="Azul" aria-label="Nome da cor"></div></td>' +
+        grade.tamanhos.map(function (t, ti) {
+          return '<td><input class="q" type="number" min="0" max="9999" step="1" value="' + esc(grade.q[ci][ti]) + '" data-c="' + ci + '" data-t="' + ti + '" aria-label="Estoque da cor ' + esc(c.name) + ', tamanho ' + esc(t) + '"></td>';
+        }).join('') +
+        '<td><button class="fechar" type="button" data-tirar-cor="' + ci + '" aria-label="Remover cor ' + esc(c.name) + '">×</button></td></tr>';
+    }).join('') + '</tbody></table>';
+  }
+  function adicionarTamanho(nome) {
+    lerGrade();
+    if (nome && grade.tamanhos.indexOf(nome) !== -1) return;
+    grade.tamanhos.push(nome);
+    grade.q.forEach(function (linha) { linha.push(0); });
+    desenharGrade();
+  }
+  $('#grade').addEventListener('click', function (evento) {
+    var cor = evento.target.closest('[data-tirar-cor]');
+    var tamanho = evento.target.closest('[data-tirar-tamanho]');
+    if (!cor && !tamanho) return;
+    lerGrade();
+    if (cor) {
+      grade.cores.splice(+cor.dataset.tirarCor, 1);
+      grade.q.splice(+cor.dataset.tirarCor, 1);
+    } else {
+      var indice = +tamanho.dataset.tirarTamanho;
+      grade.tamanhos.splice(indice, 1);
+      grade.q.forEach(function (linha) { linha.splice(indice, 1); });
+    }
+    desenharGrade();
   });
   $('#atalhos').addEventListener('click', function (evento) {
     var botao = evento.target.closest('[data-atalho]');
-    if (!botao) return;
-    var tamanho = botao.dataset.atalho;
-    var existe = [].some.call(document.querySelectorAll('.t-nome'), function (i) { return tamanho && i.value === tamanho; });
-    if (!existe) linhaTamanho(tamanho, 0);
+    if (botao) { adicionarTamanho(botao.dataset.atalho); return; }
+    if (evento.target.closest('[data-nova-cor]')) {
+      lerGrade();
+      grade.cores.push({ name: '', hex: '#7a1218' });
+      grade.q.push(grade.tamanhos.map(function () { return 0; }));
+      desenharGrade();
+      var nomes = document.querySelectorAll('#grade .c-nome');
+      nomes[nomes.length - 1].focus();
+    }
   });
   function abrirEditor(p) {
     editando = p || null;
@@ -212,7 +263,6 @@
     form.reset();
     $('#foto').value = '';
     $('#erro-produto').hidden = true;
-    $('#tamanhos').innerHTML = '';
     $('#editor-titulo').textContent = p ? 'Editar produto' : 'Novo produto';
     $('#foto-previa').src = fotoSrc(p ? p.image : FOTO_PADRAO);
     if (p) {
@@ -223,10 +273,15 @@
       form.ativo.checked = p.active;
       form.exemplo.checked = p.is_sample;
       form.querySelectorAll('[name="categoria"]').forEach(function (c) { c.checked = p.tags.indexOf(c.value) !== -1; });
-      p.sizes.forEach(function (t) { linhaTamanho(t, Number(p.stock[t]) || 0); });
+      grade = {
+        cores: p.colors.map(function (c) { return { name: c.name, hex: c.hex || COR_PADRAO }; }),
+        tamanhos: p.sizes.slice(),
+        q: p.colors.map(function (c) { return p.sizes.map(function (t) { return qtd(p, c.name, t); }); })
+      };
     } else {
-      ['P', 'M', 'G'].forEach(function (t) { linhaTamanho(t, 0); });
+      grade = { cores: [{ name: 'Única', hex: COR_PADRAO }], tamanhos: ['P', 'M', 'G'], q: [[0, 0, 0]] };
     }
+    desenharGrade();
     editor.showModal();
   }
   $('#novo').addEventListener('click', function () { abrirEditor(null); });
@@ -268,24 +323,31 @@
     if (!preco) throw new Error('Informe um preço válido, por exemplo 259,90.');
     if (textoPromo && !promo) throw new Error('Informe um preço promocional válido.');
     if (promo && promo >= preco) throw new Error('O preço promocional precisa ser menor que o preço normal.');
-    var tamanhos = [];
-    var estoque = {};
-    document.querySelectorAll('.tamanho-linha').forEach(function (linha) {
-      var tamanho = linha.querySelector('.t-nome').value.trim();
-      var quantidade = Number(linha.querySelector('.t-qtd').value);
-      if (!tamanho) throw new Error('Preencha o nome de todos os tamanhos.');
-      if (tamanhos.indexOf(tamanho) !== -1) throw new Error('O tamanho ' + tamanho + ' está repetido.');
-      if (!Number.isInteger(quantidade) || quantidade < 0) throw new Error('O estoque de ' + tamanho + ' precisa ser um número inteiro.');
-      tamanhos.push(tamanho);
-      estoque[tamanho] = quantidade;
-    });
+    lerGrade();
+    var nomesCor = grade.cores.map(function (c) { return c.name.trim(); });
+    var tamanhos = grade.tamanhos.map(function (x) { return x.trim(); });
+    if (!nomesCor.length) throw new Error('Adicione pelo menos uma cor.');
     if (!tamanhos.length) throw new Error('Adicione pelo menos um tamanho.');
+    if (nomesCor.indexOf('') !== -1) throw new Error('Preencha o nome de todas as cores.');
+    if (tamanhos.indexOf('') !== -1) throw new Error('Preencha o nome de todos os tamanhos.');
+    if (new Set(nomesCor).size !== nomesCor.length) throw new Error('Há cores repetidas.');
+    if (new Set(tamanhos).size !== tamanhos.length) throw new Error('Há tamanhos repetidos.');
+    var estoque = {};
+    nomesCor.forEach(function (cor, ci) {
+      estoque[cor] = {};
+      tamanhos.forEach(function (tam, ti) {
+        var valor = grade.q[ci][ti];
+        if (!Number.isInteger(valor) || valor < 0) throw new Error('O estoque de ' + cor + ', ' + tam + ' precisa ser um número inteiro.');
+        estoque[cor][tam] = valor;
+      });
+    });
     return {
       name: nome,
       description: form.descricao.value.trim(),
       price_cents: preco,
       promo_price_cents: promo,
       sizes: tamanhos,
+      colors: grade.cores.map(function (c, i) { return { name: nomesCor[i], hex: c.hex }; }),
       stock: estoque,
       tags: [].map.call(form.querySelectorAll('[name="categoria"]:checked'), function (c) { return c.value; }),
       active: form.ativo.checked,
@@ -363,11 +425,12 @@
         : '';
       return '<li class="pedido"><div class="pedido-topo"><h3>Pedido #' + esc(o.number) + '</h3><div class="pedido-controle">' + controle + '</div></div>' +
         '<p>' + new Date(o.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) + ' · <strong>' + dinheiro(o.total_cents) + '</strong></p>' +
-        '<p>' + esc(o.customer_name) + ' · <a href="' + esc(whatsapp) + '" target="_blank" rel="noopener">' + esc(o.phone) + '</a></p>' +
+        '<p>' + esc(o.customer_name) + ' · <a href="' + esc(whatsapp) + '" target="_blank" rel="noopener">' + esc(o.phone) + '</a>' + (o.city ? ' · ' + esc(o.city) + ' - ' + esc(o.state) : '') + '</p>' +
+        (o.payment_method ? '<p>Pagamento: ' + esc(PAGAMENTOS[o.payment_method] || o.payment_method) + '</p>' : '') +
         '<p>' + (o.delivery === 'envio' ? 'Receber em casa: ' + esc(o.address || '') : 'Retirar na loja') + '</p>' +
         (o.note ? '<p>Observação: ' + esc(o.note) + '</p>' : '') +
         '<ul class="pedido-itens">' + o.order_items.map(function (i) {
-          return '<li>' + i.quantity + 'x ' + esc(i.product_name) + ' (' + esc(i.size) + ') · ' + dinheiro(i.unit_price_cents) + '</li>';
+          return '<li>' + i.quantity + 'x ' + esc(i.product_name) + ' (' + variacaoItem(i) + ') · ' + dinheiro(i.unit_price_cents) + '</li>';
         }).join('') + '</ul>' + acoes + '</li>';
     }).join('') + '</ul>';
   }
@@ -398,15 +461,150 @@
     var cancelar = evento.target.closest('[data-cancelar]');
     var reabrir = evento.target.closest('[data-reabrir]');
     if (finalizar) {
-      if (!window.confirm('Finalizar o pedido #' + finalizar.dataset.numero + '?\n\nConfirme que o pagamento foi recebido. O estoque será baixado.')) return;
-      ocupado(finalizar, true, 'Finalizando…');
-      concluirPedido(sb.rpc('admin_finalize_order', { p_order: finalizar.dataset.finalizar }), 'Pedido finalizado e estoque baixado.');
+      pedidoFinalizando = finalizar.dataset.finalizar;
+      $('#form-finalizar').reset();
+      $('#erro-finalizar').hidden = true;
+      $('#finalizar-titulo').textContent = 'Finalizar pedido #' + finalizar.dataset.numero;
+      $('#finalizar').showModal();
     }
     if (cancelar && window.confirm('Cancelar o pedido #' + cancelar.dataset.numero + '?')) {
       mudarStatus(cancelar.dataset.cancelar, 'cancelado', 'Pedido cancelado.');
     }
     if (reabrir) mudarStatus(reabrir.dataset.reabrir, 'novo', 'Pedido reaberto.');
   });
+
+  /* Finalização com forma de pagamento */
+  var pedidoFinalizando = null;
+  $('#finalizar').addEventListener('click', function (evento) {
+    if (evento.target === this || evento.target.closest('[data-fechar]')) this.close();
+  });
+  $('#form-finalizar').addEventListener('submit', function (evento) {
+    evento.preventDefault();
+    var formulario = evento.target;
+    var botao = formulario.querySelector('button[type="submit"]');
+    var erro = $('#erro-finalizar');
+    if (!formulario.pagamento.value) {
+      erro.textContent = 'Escolha a forma de pagamento.';
+      erro.hidden = false;
+      return;
+    }
+    ocupado(botao, true, 'Finalizando…');
+    sb.rpc('admin_finalize_order', { p_order: pedidoFinalizando, p_payment: formulario.pagamento.value }).then(function (r) {
+      ocupado(botao, false);
+      if (r.error) {
+        erro.textContent = r.error.code === 'P0001' ? r.error.message : 'Não foi possível finalizar o pedido.';
+        erro.hidden = false;
+        return;
+      }
+      $('#finalizar').close();
+      avisar('Pedido finalizado e estoque baixado.');
+      carregarPedidos();
+      carregarProdutos();
+    });
+  });
+
+  /* Relatórios */
+  var referencia = new Date();
+  function iso(data) {
+    return data.getFullYear() + '-' + String(data.getMonth() + 1).padStart(2, '0') + '-' + String(data.getDate()).padStart(2, '0');
+  }
+  function dataBr(data) { return data.toLocaleDateString('pt-BR'); }
+  function intervalo() {
+    var tipo = $('#rel-tipo').value;
+    var a = referencia.getFullYear(), m = referencia.getMonth(), d = referencia.getDate();
+    if (tipo === 'diario') return [new Date(a, m, d), new Date(a, m, d)];
+    if (tipo === 'semanal') {
+      var inicio = d - ((referencia.getDay() + 6) % 7);
+      return [new Date(a, m, inicio), new Date(a, m, inicio + 6)];
+    }
+    if (tipo === 'mensal') return [new Date(a, m, 1), new Date(a, m + 1, 0)];
+    return [new Date(a, 0, 1), new Date(a, 11, 31)];
+  }
+  function moverPeriodo(sentido) {
+    var tipo = $('#rel-tipo').value;
+    var a = referencia.getFullYear(), m = referencia.getMonth(), d = referencia.getDate();
+    if (tipo === 'diario') referencia = new Date(a, m, d + sentido);
+    if (tipo === 'semanal') referencia = new Date(a, m, d + 7 * sentido);
+    if (tipo === 'mensal') referencia = new Date(a, m + sentido, 1);
+    if (tipo === 'anual') referencia = new Date(a + sentido, 0, 1);
+    carregarRelatorio();
+  }
+  function tabela(titulo, cabecalho, linhas, largo) {
+    return '<section class="bloco' + (largo ? ' bloco-largo' : '') + '"><h3>' + titulo + '</h3><div class="tabela-rolagem"><table class="tabela"><thead><tr>' +
+      cabecalho.map(function (c, i) { return '<th' + (i ? ' class="num"' : '') + '>' + c + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      linhas.map(function (l) {
+        return '<tr>' + l.map(function (c, i) { return '<td' + (i ? ' class="num"' : '') + '>' + c + '</td>'; }).join('') + '</tr>';
+      }).join('') + '</tbody></table></div></section>';
+  }
+  function rotuloPeriodo(texto) {
+    var partes = texto.split('-');
+    return partes.length === 3 ? partes[2] + '/' + partes[1] + '/' + partes[0] : partes[1] + '/' + partes[0];
+  }
+  function desenharRelatorio(dados) {
+    var caixa = $('#relatorio');
+    if (!dados.orders) {
+      caixa.innerHTML = '<p class="estado">Nenhuma venda finalizada neste período.</p>';
+      return;
+    }
+    var ticket = Math.round(dados.revenue / dados.orders);
+    function linhasValor(lista, rotulo) {
+      return lista.map(function (x) {
+        return [rotulo(x.label), x.orders, dinheiro(x.revenue), Math.round(x.revenue / dados.revenue * 100) + '%'];
+      });
+    }
+    var cabecalho = ['', 'Pedidos', 'Valor', '%'];
+    caixa.innerHTML = '<div class="resumo">' + [['Faturamento', dinheiro(dados.revenue)], ['Pedidos', dados.orders], ['Peças vendidas', dados.items], ['Ticket médio', dinheiro(ticket)]].map(function (i) {
+      return '<div><strong>' + i[1] + '</strong><span>' + i[0] + '</span></div>';
+    }).join('') + '</div><div class="relatorio-grade">' +
+      tabela('Por forma de pagamento', ['Forma'].concat(cabecalho.slice(1)), linhasValor(dados.by_payment, function (l) { return esc(PAGAMENTOS[l] || l); })) +
+      tabela('Por estado', ['Estado'].concat(cabecalho.slice(1)), linhasValor(dados.by_state, esc)) +
+      tabela('Por cidade', ['Cidade'].concat(cabecalho.slice(1)), linhasValor(dados.by_city, function (l) { return esc(l.replace(/ (Da|De|Do|Das|Dos|E) /g, function (m) { return m.toLowerCase(); })); })) +
+      tabela('Por período', ['Data'].concat(cabecalho.slice(1)), linhasValor(dados.by_period, rotuloPeriodo)) +
+      tabela('Mais vendidos', ['Produto', 'Peças', 'Valor'], dados.top_products.map(function (x) {
+        return [esc(x.label) + ' (' + variacaoItem({ color: x.color, size: x.size }) + ')', x.quantity, dinheiro(x.revenue)];
+      }), true) + '</div>';
+  }
+  function carregarRelatorio() {
+    var tipo = $('#rel-tipo').value;
+    var personalizado = tipo === 'personalizado';
+    var caixa = $('#relatorio');
+    var de, ate;
+    $('#rel-navegar').hidden = personalizado;
+    $('#rel-datas').hidden = !personalizado;
+    if (personalizado) {
+      if (!$('#rel-de').value) {
+        $('#rel-de').value = iso(new Date(referencia.getFullYear(), referencia.getMonth(), 1));
+        $('#rel-ate').value = iso(new Date(referencia.getFullYear(), referencia.getMonth() + 1, 0));
+      }
+      de = $('#rel-de').value;
+      ate = $('#rel-ate').value;
+      if (!de || !ate || ate < de) {
+        caixa.innerHTML = '<p class="estado">Escolha uma data inicial anterior à data final.</p>';
+        return;
+      }
+    } else {
+      var datas = intervalo();
+      de = iso(datas[0]);
+      ate = iso(datas[1]);
+      if (tipo === 'diario') $('#rel-rotulo').textContent = dataBr(datas[0]);
+      else if (tipo === 'mensal') $('#rel-rotulo').textContent = datas[0].toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      else if (tipo === 'anual') $('#rel-rotulo').textContent = String(datas[0].getFullYear());
+      else $('#rel-rotulo').textContent = dataBr(datas[0]) + ' a ' + dataBr(datas[1]);
+    }
+    caixa.innerHTML = '<p class="estado">Carregando relatório…</p>';
+    var pedido = de + ate + tipo;
+    carregarRelatorio.atual = pedido;
+    sb.rpc('admin_report', { p_from: de, p_to: ate }).then(function (r) {
+      if (carregarRelatorio.atual !== pedido) return;
+      if (r.error) { caixa.innerHTML = '<p class="estado">Não foi possível carregar o relatório.</p>'; return; }
+      desenharRelatorio(r.data);
+    });
+  }
+  $('#rel-tipo').addEventListener('change', carregarRelatorio);
+  $('#rel-de').addEventListener('change', carregarRelatorio);
+  $('#rel-ate').addEventListener('change', carregarRelatorio);
+  $('#rel-anterior').addEventListener('click', function () { moverPeriodo(-1); });
+  $('#rel-proximo').addEventListener('click', function () { moverPeriodo(1); });
 
   sb.auth.getSession().then(function (r) {
     if (r.data.session) entrarNoPainel();
