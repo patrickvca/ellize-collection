@@ -20,11 +20,20 @@
     return '<svg class="icone' + (linha ? ' icone-linha' : '') + '" aria-hidden="true"><use href="' + ICONES + nome + '"/></svg>';
   }
 
+  function preco(p) { return p.promo_price_cents || p.price_cents; }
+  function estoque(p, tamanho) { return Number((p.stock || {})[tamanho]) || 0; }
+  function esgotado(p) { return !p.sizes.some(function (t) { return estoque(p, t) > 0; }); }
+  function precoHTML(p) {
+    return p.promo_price_cents
+      ? '<s class="preco-antigo">' + dinheiro(p.price_cents) + '</s> <span class="preco-promo">' + dinheiro(p.promo_price_cents) + '</span>'
+      : dinheiro(p.price_cents);
+  }
+
   /* Catálogo público, carregado uma vez por página */
   var catalogo = null;
   function produtos() {
     if (!catalogo) {
-      catalogo = fetch(CONFIG.url + '/rest/v1/products?select=id,slug,name,price_cents,image,sizes,tags,is_sample&order=created_at.desc&limit=200', {
+      catalogo = fetch(CONFIG.url + '/rest/v1/products?select=id,slug,name,price_cents,promo_price_cents,stock,image,sizes,tags,is_sample&order=created_at.desc&limit=200', {
         headers: { apikey: CONFIG.chave }
       }).then(function (resposta) {
         if (!resposta.ok) throw new Error('catalogo');
@@ -38,7 +47,7 @@
   }
   function sugestoes(todos, referencia, limite) {
     var fora = carrinho.ler().map(function (i) { return i.id; }).concat(referencia ? [referencia.id] : []);
-    var livres = todos.filter(function (p) { return fora.indexOf(p.id) === -1; });
+    var livres = todos.filter(function (p) { return fora.indexOf(p.id) === -1 && !esgotado(p); });
     function parecido(p) {
       return referencia ? p.tags.filter(function (t) { return referencia.tags.indexOf(t) !== -1; }).length : 0;
     }
@@ -47,14 +56,14 @@
   function vitrine(lista) {
     return '<div class="vitrine-grade">' + lista.map(function (p) {
       return '<a class="vitrine-item" href="produto.html?p=' + encodeURIComponent(p.slug) + '"><img src="' + esc(p.image) + '" alt="" width="160" height="200" loading="lazy">' +
-        '<span>' + esc(p.name) + '</span><span>' + dinheiro(p.price_cents) + '</span></a>';
+        '<span>' + esc(p.name) + '</span><span>' + precoHTML(p) + '</span></a>';
     }).join('') + '</div>';
   }
 
   /* Barra e rodapé: uma única versão para todas as páginas */
   var MENU = [
     { id: 'novidades', rotulo: 'Novidades', vitrine: true, colunas: [
-      ['Categorias', [['Ver todas', 'loja.html'], ['Feminino', 'loja.html?c=feminino'], ['Masculino', 'loja.html?c=masculino'],
+      ['Categorias', [['Ver todas', 'loja.html'], ['Promoções', 'loja.html?c=promocao'], ['Feminino', 'loja.html?c=feminino'], ['Masculino', 'loja.html?c=masculino'],
         ['Conjuntos', 'loja.html?c=conjuntos'], ['Vestidos', 'loja.html?c=vestidos'], ['Bolsas', 'loja.html?c=bolsas']]]
     ] },
     { id: 'colecoes', rotulo: 'Coleções', colunas: [
@@ -136,10 +145,10 @@
       carrinho.atualizarSelo();
       document.dispatchEvent(new CustomEvent('ellize:sacola'));
     },
-    adicionar: function (id, tamanho, quantidade) {
+    adicionar: function (id, tamanho, quantidade, limite) {
       var itens = carrinho.ler();
       var item = itens.find(function (i) { return i.id === id && i.size === tamanho; });
-      if (item) item.qty = Math.min(10, item.qty + quantidade);
+      if (item) item.qty = Math.min(limite || 10, 10, item.qty + quantidade);
       else itens.push({ id: id, size: tamanho, qty: quantidade });
       carrinho.salvar(itens);
     },
@@ -171,7 +180,7 @@
 
   function linhaHTML(p, tamanho) {
     return '<a href="produto.html?p=' + encodeURIComponent(p.slug) + '">' + esc(p.name) + '</a>' +
-      '<span>Tamanho ' + esc(tamanho) + '</span><span>' + dinheiro(p.price_cents) + '</span>';
+      '<span>Tamanho ' + esc(tamanho) + '</span><span>' + precoHTML(p) + '</span>';
   }
   function desenharLista() {
     sacolaTitulo.textContent = 'Sacola';
@@ -181,20 +190,24 @@
       var mapa = {};
       todos.forEach(function (p) { mapa[p.id] = p; });
       var itens = carrinho.ler();
-      var validos = itens.filter(function (i) { return mapa[i.id] && mapa[i.id].sizes.indexOf(i.size) !== -1; });
-      if (validos.length !== itens.length) carrinho.salvar(validos);
+      var antes = JSON.stringify(itens);
+      var validos = itens.filter(function (i) {
+        return mapa[i.id] && mapa[i.id].sizes.indexOf(i.size) !== -1 && estoque(mapa[i.id], i.size) > 0;
+      });
+      validos.forEach(function (i) { i.qty = Math.min(i.qty, estoque(mapa[i.id], i.size)); });
+      if (JSON.stringify(validos) !== antes) carrinho.salvar(validos);
       if (!validos.length) {
         sacolaCorpo.innerHTML = '<div class="estado"><h2>Sua sacola está vazia</h2><p>Escolha suas peças nas novidades.</p><a class="botao botao-vinho" href="loja.html">Ver novidades</a></div>';
         return;
       }
-      var total = validos.reduce(function (soma, i) { return soma + i.qty * mapa[i.id].price_cents; }, 0);
+      var total = validos.reduce(function (soma, i) { return soma + i.qty * preco(mapa[i.id]); }, 0);
       sacolaCorpo.innerHTML = '<ul class="linhas">' + validos.map(function (i, n) {
         var p = mapa[i.id];
         return '<li class="linha"><img src="' + esc(p.image) + '" alt="" width="72" height="90"><div class="linha-info">' + linhaHTML(p, i.size) + '</div>' +
           '<div class="linha-acoes"><div class="passo">' +
           '<button type="button" data-acao="menos" data-n="' + n + '" aria-label="Diminuir quantidade de ' + esc(p.name) + '"' + (i.qty <= 1 ? ' disabled' : '') + '>−</button>' +
           '<span aria-live="polite">' + i.qty + '</span>' +
-          '<button type="button" data-acao="mais" data-n="' + n + '" aria-label="Aumentar quantidade de ' + esc(p.name) + '"' + (i.qty >= 10 ? ' disabled' : '') + '>+</button></div>' +
+          '<button type="button" data-acao="mais" data-n="' + n + '" aria-label="Aumentar quantidade de ' + esc(p.name) + '"' + (i.qty >= Math.min(10, estoque(p, i.size)) ? ' disabled' : '') + '>+</button></div>' +
           '<button class="botao-icone" type="button" data-acao="remover" data-n="' + n + '" aria-label="Remover ' + esc(p.name) + '">' + icone('i-lixo', true) + '</button></div></li>';
       }).join('') + '</ul>';
       sacolaRodape.innerHTML = '<p class="sacola-valor"><span>Subtotal</span><strong>' + dinheiro(total) + '</strong></p>' +
@@ -210,7 +223,7 @@
     if (!sacola.open) sacola.showModal();
   }
   function adicionar(p, tamanho) {
-    carrinho.adicionar(p.id, tamanho, 1);
+    carrinho.adicionar(p.id, tamanho, 1, estoque(p, tamanho));
     abrirSacola();
     sacolaTitulo.textContent = 'Produto adicionado à sacola';
     sacolaCorpo.innerHTML = '<div class="linha"><img src="' + esc(p.image) + '" alt="" width="72" height="90"><div class="linha-info">' + linhaHTML(p, tamanho) + '</div></div>' +
@@ -244,7 +257,8 @@
 
   window.Ellize = {
     config: CONFIG, esc: esc, dinheiro: dinheiro, icone: icone,
-    produtos: produtos, sugestoes: sugestoes, adicionar: adicionar
+    produtos: produtos, sugestoes: sugestoes, adicionar: adicionar,
+    preco: preco, estoque: estoque, esgotado: esgotado, precoHTML: precoHTML
   };
 
   /* Menu e submenus */

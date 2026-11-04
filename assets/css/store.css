@@ -22,8 +22,9 @@
 .produto:hover img { transform: scale(1.04); }
 .produto-nome { font-family: var(--serif); font-size: 1.125rem; line-height: 1.3; }
 .produto-preco { color: var(--tinta-suave); }
+.selos { position: absolute; top: 0.75rem; left: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.25rem; }
 .selo-exemplo {
-  position: absolute; top: 0.75rem; left: 0.75rem; padding: 0.25rem 0.625rem; border-radius: var(--raio-pill);
+  padding: 0.25rem 0.625rem; border-radius: var(--raio-pill);
   background: var(--marfim-claro); color: var(--vinho); font-size: 0.6875rem; letter-spacing: 0.08em; text-transform: uppercase;
 }
 .esqueleto { border-radius: var(--raio-m); background: var(--marfim); aspect-ratio: 4 / 5; animation: pulso 1.4s ease-in-out infinite; }
@@ -261,3 +262,12 @@
 @media (prefers-reduced-motion: reduce) {
   .painel-barra, .sacola[open] { animation: none; }
 }
+
+/* Promoção e estoque */
+.selo-promo { background: var(--vinho); color: var(--creme); }
+.selo-esgotado { background: var(--tinta); color: var(--creme); }
+.preco-antigo { color: var(--tinta-suave); font-size: 0.875em; }
+.preco-promo { color: var(--vinho); font-weight: 500; }
+.tamanhos input:disabled { cursor: not-allowed; }
+.tamanhos input:disabled + span { border-color: var(--linha); background: transparent; color: #8f8580; text-decoration: line-through; cursor: not-allowed; }
+.tamanhos label:hover input:disabled + span { border-color: var(--linha); }

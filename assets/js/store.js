@@ -4,10 +4,10 @@
   var WHATSAPP = window.Ellize.config.whatsapp;
   var FILTROS = [
     ['', 'Todos'], ['feminino', 'Feminino'], ['masculino', 'Masculino'],
-    ['conjuntos', 'Conjuntos'], ['vestidos', 'Vestidos'], ['bolsas', 'Bolsas']
+    ['conjuntos', 'Conjuntos'], ['vestidos', 'Vestidos'], ['bolsas', 'Bolsas'], ['promocao', 'Promoção']
   ];
   var STATUS = {
-    novo: 'Recebido', confirmado: 'Confirmado', pago: 'Pago',
+    novo: 'Aguardando pagamento', confirmado: 'Confirmado', pago: 'Pago',
     enviado: 'Enviado', entregue: 'Entregue', cancelado: 'Cancelado'
   };
   var VOLTAS = ['carrinho.html'];
@@ -21,6 +21,10 @@
   var dinheiro = window.Ellize.dinheiro;
   var esc = window.Ellize.esc;
   var icone = window.Ellize.icone;
+  var preco = window.Ellize.preco;
+  var estoque = window.Ellize.estoque;
+  var esgotado = window.Ellize.esgotado;
+  var precoHTML = window.Ellize.precoHTML;
   function $(seletor) { return document.querySelector(seletor); }
   function estado(titulo, texto, acao) {
     return '<div class="estado"><h2>' + esc(titulo) + '</h2>' + (texto ? '<p>' + esc(texto) + '</p>' : '') + (acao || '') + '</div>';
@@ -30,7 +34,9 @@
       '<a class="botao botao-vinho" href="' + esc(location.pathname.split('/').pop() + location.search) + '">Tentar novamente</a>');
   }
   function selo(produto) {
-    return produto.is_sample ? '<span class="selo-exemplo">Exemplo</span>' : '';
+    return '<span class="selos">' + (produto.is_sample ? '<span class="selo-exemplo">Exemplo</span>' : '') +
+      (produto.promo_price_cents ? '<span class="selo-exemplo selo-promo">Promoção</span>' : '') +
+      (esgotado(produto) ? '<span class="selo-exemplo selo-esgotado">Esgotado</span>' : '') + '</span>';
   }
   function traduzirErro(erro) {
     var m = (erro && erro.message) || '';
@@ -58,7 +64,7 @@
   }
 
   /* Catálogo */
-  var NOMES = { feminino: 'Feminino', masculino: 'Masculino', conjuntos: 'Conjuntos', vestidos: 'Vestidos', bolsas: 'Bolsas' };
+  var NOMES = { feminino: 'Feminino', masculino: 'Masculino', conjuntos: 'Conjuntos', vestidos: 'Vestidos', bolsas: 'Bolsas', promocao: 'Promoção' };
 
   function trilha(itens) {
     return '<nav class="trilha" aria-label="Você está em"><ol>' + itens.map(function (item, n) {
@@ -70,12 +76,12 @@
     var link = 'produto.html?p=' + encodeURIComponent(p.slug);
     return '<article class="produto" data-id="' + esc(p.id) + '">' +
       '<div class="produto-foto"><a href="' + link + '" tabindex="-1" aria-hidden="true"><img src="' + esc(p.image) + '" alt="" width="800" height="1000" loading="lazy"></a>' + selo(p) +
-      '<div class="compra-rapida"><button class="rapida-botao" type="button" data-rapida>Compra rápida</button>' +
-      '<div class="rapida-tamanhos" hidden>' + p.sizes.map(function (t) {
+      (esgotado(p) ? '' : '<div class="compra-rapida"><button class="rapida-botao" type="button" data-rapida>Compra rápida</button>' +
+      '<div class="rapida-tamanhos" hidden>' + p.sizes.filter(function (t) { return estoque(p, t) > 0; }).map(function (t) {
         return '<button type="button" data-tamanho="' + esc(t) + '" aria-label="Adicionar ' + esc(p.name) + ', tamanho ' + esc(t) + '">' + esc(t) + '</button>';
-      }).join('') + '</div></div></div>' +
+      }).join('') + '</div></div>') + '</div>' +
       '<a class="produto-info" href="' + link + '"><span class="produto-nome">' + esc(p.name) + '</span>' +
-      '<span class="produto-preco">' + dinheiro(p.price_cents) + '</span></a></article>';
+      '<span class="produto-preco">' + precoHTML(p) + '</span></a></article>';
   }
   function ativarCompraRapida(raiz, mapa) {
     raiz.addEventListener('click', function (evento) {
@@ -85,7 +91,8 @@
       var rapida = evento.target.closest('[data-rapida]');
       var tamanho = evento.target.closest('[data-tamanho]');
       if (rapida) {
-        if (p.sizes.length === 1) { window.Ellize.adicionar(p, p.sizes[0]); return; }
+        var livres = p.sizes.filter(function (t) { return estoque(p, t) > 0; });
+        if (livres.length === 1) { window.Ellize.adicionar(p, livres[0]); return; }
         rapida.hidden = true;
         var opcoes = cartaoAtual.querySelector('.rapida-tamanhos');
         opcoes.hidden = false;
@@ -120,9 +127,9 @@
     function desenhar() {
       var tamanho = campoTamanho.value;
       var ordem = campoOrdem.value;
-      var itens = lista.filter(function (p) { return !tamanho || p.sizes.indexOf(tamanho) !== -1; });
-      if (ordem === 'menor') itens.sort(function (a, b) { return a.price_cents - b.price_cents; });
-      if (ordem === 'maior') itens.sort(function (a, b) { return b.price_cents - a.price_cents; });
+      var itens = lista.filter(function (p) { return !tamanho || estoque(p, tamanho) > 0; });
+      if (ordem === 'menor') itens.sort(function (a, b) { return preco(a) - preco(b); });
+      if (ordem === 'maior') itens.sort(function (a, b) { return preco(b) - preco(a); });
       $('#contagem').textContent = itens.length + (itens.length === 1 ? ' produto' : ' produtos');
       grade.innerHTML = itens.length ? itens.map(cartao).join('') : estado(
         busca ? 'Nenhuma peça encontrada' : 'Nenhuma peça por aqui',
@@ -131,7 +138,9 @@
     }
 
     var consulta = sb.from('products').select('*').order('created_at', { ascending: false });
-    if (pedidas.length) consulta = consulta.contains('tags', pedidas);
+    var categorias = pedidas.filter(function (t) { return t !== 'promocao'; });
+    if (categorias.length) consulta = consulta.contains('tags', categorias);
+    if (pedidas.indexOf('promocao') !== -1) consulta = consulta.not('promo_price_cents', 'is', null);
     if (busca) consulta = consulta.ilike('name', '%' + busca.replace(/[%_\\]/g, '\\$&') + '%');
     consulta.then(function (resposta) {
       grade.setAttribute('aria-busy', 'false');
@@ -167,17 +176,19 @@
       var categoria = p.tags.filter(function (t) { return NOMES[t]; }).pop();
       $('#trilha').innerHTML = trilha([['Início', 'index.html'], ['Novidades', 'loja.html']]
         .concat(categoria ? [[NOMES[categoria], 'loja.html?c=' + categoria]] : []).concat([[p.name]]));
-      var unico = p.sizes.length === 1;
+      var livres = p.sizes.filter(function (t) { return estoque(p, t) > 0; });
+      var unico = livres.length === 1;
       alvo.innerHTML =
         '<div class="detalhe-foto"><img src="' + esc(p.image) + '" alt="" width="800" height="1000">' + selo(p) + '</div>' +
         '<form class="detalhe-info" id="form-produto" novalidate>' +
         '<h1>' + esc(p.name) + '</h1>' +
-        '<p class="detalhe-preco">' + dinheiro(p.price_cents) + '</p>' +
+        '<p class="detalhe-preco">' + precoHTML(p) + '</p>' +
         '<fieldset class="tamanhos"><legend>Tamanho</legend>' + p.sizes.map(function (t) {
-          return '<label><input type="radio" name="tamanho" value="' + esc(t) + '"' + (unico ? ' checked' : '') + '><span>' + esc(t) + '</span></label>';
+          var tem = estoque(p, t) > 0;
+          return '<label><input type="radio" name="tamanho" value="' + esc(t) + '"' + (unico && tem ? ' checked' : '') + (tem ? '' : ' disabled') + '><span>' + esc(t) + '</span></label>';
         }).join('') + '</fieldset>' +
         '<p class="campo-erro" id="erro-tamanho" role="alert" hidden>Selecione um tamanho.</p>' +
-        '<button class="botao botao-vinho botao-largo" type="submit">Adicionar à sacola</button>' +
+        '<button class="botao botao-vinho botao-largo" type="submit"' + (livres.length ? '>Adicionar à sacola' : ' disabled>Esgotado') + '</button>' +
         '<a class="botao botao-linha botao-largo" target="_blank" rel="noopener" href="' + WHATSAPP + '?text=' +
         encodeURIComponent('Olá! Tenho uma dúvida sobre: ' + p.name) + '">' + icone('i-whatsapp') + 'Tirar dúvida no WhatsApp</a>' +
         '<div class="sanfona"><details open><summary>Sobre a peça</summary><p>' + esc(p.description) + '</p></details>' +
@@ -208,10 +219,15 @@
     var produtos = {};
 
     function linhasValidas() {
-      return carrinho.ler().filter(function (i) { return produtos[i.id] && produtos[i.id].sizes.indexOf(i.size) !== -1; });
+      return carrinho.ler().filter(function (i) {
+        return produtos[i.id] && produtos[i.id].sizes.indexOf(i.size) !== -1 && estoque(produtos[i.id], i.size) > 0;
+      }).map(function (i) {
+        i.qty = Math.min(i.qty, estoque(produtos[i.id], i.size));
+        return i;
+      });
     }
     function total() {
-      return linhasValidas().reduce(function (soma, i) { return soma + i.qty * produtos[i.id].price_cents; }, 0);
+      return linhasValidas().reduce(function (soma, i) { return soma + i.qty * preco(produtos[i.id]); }, 0);
     }
     function desenharVazio() {
       alvo.innerHTML = estado('Sua sacola está vazia', 'Escolha suas peças nas novidades.', '<a class="botao botao-vinho" href="loja.html">Ver novidades</a>');
@@ -223,11 +239,11 @@
         var p = produtos[i.id];
         return '<li class="linha"><img src="' + esc(p.image) + '" alt="" width="96" height="120">' +
           '<div class="linha-info"><a href="produto.html?p=' + encodeURIComponent(p.slug) + '">' + esc(p.name) + '</a>' +
-          '<span>Tamanho ' + esc(i.size) + '</span><span>' + dinheiro(p.price_cents) + '</span></div>' +
+          '<span>Tamanho ' + esc(i.size) + '</span><span>' + precoHTML(p) + '</span></div>' +
           '<div class="linha-acoes"><div class="passo">' +
           '<button type="button" data-acao="menos" data-n="' + n + '" aria-label="Diminuir quantidade de ' + esc(p.name) + '"' + (i.qty <= 1 ? ' disabled' : '') + '>−</button>' +
           '<span aria-live="polite">' + i.qty + '</span>' +
-          '<button type="button" data-acao="mais" data-n="' + n + '" aria-label="Aumentar quantidade de ' + esc(p.name) + '"' + (i.qty >= 10 ? ' disabled' : '') + '>+</button></div>' +
+          '<button type="button" data-acao="mais" data-n="' + n + '" aria-label="Aumentar quantidade de ' + esc(p.name) + '"' + (i.qty >= Math.min(10, estoque(p, i.size)) ? ' disabled' : '') + '>+</button></div>' +
           '<button class="botao-icone" type="button" data-acao="remover" data-n="' + n + '" aria-label="Remover ' + esc(p.name) + '">' + icone('i-lixo', true) + '</button></div></li>';
       }).join('');
       $('#total').textContent = dinheiro(total());
@@ -251,7 +267,7 @@
         '<label class="campo">Observação (opcional)<textarea name="nota" rows="2" maxlength="500"></textarea></label>' +
         '<p class="mensagem mensagem-erro" id="erro-pedido" role="alert" hidden></p>' +
         '<button class="botao botao-vinho botao-largo" type="submit">Fechar pedido</button>' +
-        '<p class="nota-pequena">Depois de fechar, você combina o pagamento e o frete com a loja pelo WhatsApp.</p></form>';
+        '<p class="nota-pequena">Ao fechar, você vai para o WhatsApp da loja para combinar o pagamento e o frete.</p></form>';
       var form = $('#form-pedido');
       form.addEventListener('change', function () {
         $('#campo-endereco').hidden = form.entrega.value !== 'envio';
@@ -284,12 +300,14 @@
         var texto = 'Olá! Fiz o pedido #' + pedido.number + ' no site da Ellize Collection.\n\n' +
           linhas.map(function (i) { return i.qty + 'x ' + produtos[i.id].name + ' (' + i.size + ')'; }).join('\n') +
           '\n\nTotal: ' + dinheiro(pedido.total_cents) + '\nEntrega: ' + (form.entrega.value === 'envio' ? 'Receber em casa' : 'Retirar na loja');
+        var linkPedido = WHATSAPP + '?text=' + encodeURIComponent(texto);
         carrinho.salvar([]);
         alvo.innerHTML = '<div class="estado estado-sucesso"><span class="etiqueta">Pedido #' + esc(pedido.number) + '</span>' +
-          '<h2>Pedido recebido</h2><p>Total de ' + dinheiro(pedido.total_cents) + '. Envie o pedido no WhatsApp para combinar o pagamento e o frete.</p>' +
-          '<a class="botao botao-vinho" target="_blank" rel="noopener" href="' + WHATSAPP + '?text=' + encodeURIComponent(texto) + '">' + icone('i-whatsapp') + 'Enviar no WhatsApp</a>' +
+          '<h2>Pedido recebido</h2><p>Total de ' + dinheiro(pedido.total_cents) + '. Abrindo o WhatsApp para você combinar o pagamento e o frete. Se não abrir, use o botão abaixo.</p>' +
+          '<a class="botao botao-vinho" href="' + linkPedido + '">' + icone('i-whatsapp') + 'Enviar no WhatsApp</a>' +
           '<a class="botao botao-linha" href="conta.html">Ver meus pedidos</a></div>';
         window.scrollTo(0, 0);
+        location.href = linkPedido;
       }, function () {
         ocupado(botao, false);
         erro.textContent = 'Sem conexão. Verifique sua internet e tente novamente.';
@@ -303,7 +321,7 @@
       if (r[0].error) { alvo.innerHTML = erroCarregar(); return; }
       r[0].data.forEach(function (p) { produtos[p.id] = p; });
       var validas = linhasValidas();
-      if (validas.length !== carrinho.ler().length) carrinho.salvar(validas);
+      if (JSON.stringify(validas) !== JSON.stringify(carrinho.ler())) carrinho.salvar(validas);
       if (!validas.length) { desenharVazio(); return; }
       alvo.innerHTML = '<ul class="linhas" id="itens"></ul><aside class="resumo">' +
         '<p class="resumo-total"><span>Total das peças</span><strong id="total"></strong></p>' +

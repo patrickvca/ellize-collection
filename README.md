@@ -17,6 +17,7 @@ Depois abra http://localhost:4173.
 - `index.html`: página inicial, com SEO e dados estruturados
 - `loja.html`, `produto.html`, `carrinho.html`, `conta.html`: loja online
 - `404.html`: página não encontrada
+- `administrator/`: painel da loja (produtos, estoque, promoções e pedidos)
 - `assets/css/tokens.css`: cores, fontes, espaçamentos e raios
 - `assets/css/site.css`: estilos dos componentes
 - `assets/css/store.css`: estilos da loja
@@ -31,7 +32,7 @@ Os painéis usam texturas de cetim (`cetim-*.webp`). Para usar fotos da loja, tr
 
 ## Produtos e pedidos
 
-Produtos ficam na tabela `products` e pedidos em `orders` e `order_items`, no painel do Supabase. Os produtos atuais são exemplos (`is_sample = true`) e devem ser trocados pelos reais.
+Produtos e pedidos são gerenciados no painel em `/administrator`. Só entram contas cujo e-mail esteja na tabela `admins` e já confirmado. O painel não tem cadastro nem recuperação de senha. O estoque só baixa quando a loja clica em Finalizar pedido, depois de confirmar o pagamento. Os produtos atuais são exemplos e devem ser trocados pelos reais.
 
 A chave em `store.js` é pública por natureza. A segurança vem das regras de acesso do banco, e o total do pedido é calculado no servidor.
 

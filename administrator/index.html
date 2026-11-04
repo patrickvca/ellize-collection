@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Painel | Ellize Collection</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#2c070a">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <main class="login" id="tela-login" hidden>
+    <form class="login-caixa" id="form-login" novalidate>
+      <img src="../assets/img/logo.svg" alt="Ellize Collection" width="200" height="100">
+      <h1>Painel da loja</h1>
+      <label class="campo">E-mail<input name="email" type="email" autocomplete="username" required></label>
+      <label class="campo">Senha<input name="senha" type="password" autocomplete="current-password" required></label>
+      <p class="mensagem mensagem-erro" id="erro-login" role="alert" hidden></p>
+      <button class="botao botao-vinho" type="submit">Entrar</button>
+    </form>
+  </main>
+
+  <div id="tela-painel" hidden>
+    <header class="topo">
+      <img src="../assets/img/logo-claro.svg" alt="Ellize Collection" width="110" height="55">
+      <nav class="abas" aria-label="Seções do painel">
+        <button type="button" data-aba="produtos" aria-current="page">Produtos</button>
+        <button type="button" data-aba="pedidos">Pedidos</button>
+      </nav>
+      <div class="topo-acoes">
+        <a href="../index.html" target="_blank" rel="noopener">Ver loja</a>
+        <button type="button" id="sair">Sair</button>
+      </div>
+    </header>
+
+    <main class="conteudo">
+      <section id="aba-produtos">
+        <div class="resumo" id="resumo"></div>
+        <div class="barra">
+          <input id="busca" type="search" placeholder="Buscar produto" aria-label="Buscar produto">
+          <select id="filtro" aria-label="Filtrar produtos">
+            <option value="">Todos</option>
+            <option value="ativos">Visíveis na loja</option>
+            <option value="ocultos">Ocultos</option>
+            <option value="promocao">Em promoção</option>
+            <option value="esgotados">Esgotados</option>
+          </select>
+          <button class="botao botao-vinho" id="novo" type="button">Novo produto</button>
+        </div>
+        <div id="lista-produtos" aria-busy="true"><p class="estado">Carregando produtos…</p></div>
+      </section>
+
+      <section id="aba-pedidos" hidden>
+        <div class="barra">
+          <select id="filtro-pedidos" aria-label="Filtrar pedidos">
+            <option value="">Todos os pedidos</option>
+            <option value="novo">Aguardando pagamento</option>
+            <option value="pago">Pagos</option>
+            <option value="enviado">Enviados</option>
+            <option value="entregue">Entregues</option>
+            <option value="cancelado">Cancelados</option>
+          </select>
+        </div>
+        <div id="lista-pedidos"><p class="estado">Carregando pedidos…</p></div>
+      </section>
+    </main>
+  </div>
+
+  <dialog class="editor" id="editor" aria-labelledby="editor-titulo">
+    <form id="form-produto" novalidate>
+      <div class="editor-topo">
+        <h2 id="editor-titulo">Novo produto</h2>
+        <button class="fechar" type="button" data-fechar aria-label="Fechar">×</button>
+      </div>
+      <div class="editor-corpo">
+        <div class="foto-campo">
+          <img id="foto-previa" src="../assets/img/cetim-marfim.webp" alt="" width="120" height="150">
+          <label class="campo">Foto (JPG, PNG ou WebP)<input id="foto" type="file" accept="image/jpeg,image/png,image/webp"></label>
+        </div>
+        <label class="campo">Nome<input name="nome" required maxlength="120"></label>
+        <label class="campo">Descrição<textarea name="descricao" rows="3" maxlength="2000"></textarea></label>
+        <div class="duas">
+          <label class="campo">Preço (R$)<input name="preco" inputmode="decimal" required placeholder="259,90"></label>
+          <label class="campo">Preço promocional (R$)<input name="promo" inputmode="decimal" placeholder="Sem promoção"></label>
+        </div>
+        <fieldset class="grupo">
+          <legend>Categorias</legend>
+          <div class="marcas" id="categorias"></div>
+        </fieldset>
+        <fieldset class="grupo">
+          <legend>Tamanhos e estoque</legend>
+          <div id="tamanhos"></div>
+          <div class="atalhos" id="atalhos"></div>
+        </fieldset>
+        <label class="marca-linha"><input name="ativo" type="checkbox" checked> Visível na loja</label>
+        <label class="marca-linha"><input name="exemplo" type="checkbox"> Mostrar selo "Exemplo"</label>
+        <p class="mensagem mensagem-erro" id="erro-produto" role="alert" hidden></p>
+      </div>
+      <div class="editor-rodape">
+        <button class="botao botao-linha" type="button" data-fechar>Cancelar</button>
+        <button class="botao botao-vinho" type="submit">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="aviso" id="aviso" role="status" hidden></div>
+
+  <script src="../assets/vendor/supabase-2.119.0.js" defer></script>
+  <script src="admin.js" defer></script>
+</body>
+</html>
