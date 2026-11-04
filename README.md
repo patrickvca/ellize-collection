@@ -27,6 +27,10 @@ Depois abra http://localhost:4173.
 - `assets/img/`: logo em SVG e texturas
 - `assets/data/cidades/`: municípios do Brasil por estado (fonte: IBGE)
 
+## Fotos dos produtos
+
+No painel, as fotos são cortadas na proporção 4:5 e salvas com até 1200 × 1500 px.
+
 ## Trocar as texturas por fotos
 
 Os painéis usam texturas de cetim (`cetim-*.webp`). Para usar fotos da loja, troque o `src` da imagem no painel em `index.html` e descreva a foto no `alt`.

@@ -15,6 +15,10 @@
   var pedidos = [];
   var editando = null;
   var fotoNova = null;
+  var FOTO_LARGURA = 1200;
+  var FOTO_PROPORCAO = 4 / 5;
+  var FOTO_FOCO_Y = 0.35;
+  var FOTO_MAX_BYTES = 20 * 1024 * 1024;
   var tempoAviso;
 
   function $(seletor) { return document.querySelector(seletor); }
@@ -276,7 +280,7 @@
   }
   $('#grade').addEventListener('change', function (evento) {
     var campo = evento.target.closest('[data-foto-cor]');
-    if (!campo || !campo.files[0]) return;
+    if (!campo || !campo.files[0] || !fotoValida(campo.files[0])) return;
     lerGrade();
     var cor = grade.cores[+campo.dataset.fotoCor];
     cor.arquivo = campo.files[0];
@@ -317,6 +321,9 @@
     fotoNova = null;
     form.reset();
     $('#foto').value = '';
+    $('#foto-erro').hidden = true;
+    $('#foto-texto').textContent = 'Arraste a foto para cá ou use o botão.';
+    $('#foto-botao-texto').textContent = p ? 'Trocar foto' : 'Escolher foto';
     $('#erro-produto').hidden = true;
     $('#editor-titulo').textContent = p ? 'Editar produto' : 'Novo produto';
     $('#foto-previa').src = fotoSrc(p ? p.image : FOTO_PADRAO);
@@ -344,27 +351,66 @@
   editor.addEventListener('click', function (evento) {
     if (evento.target === editor || evento.target.closest('[data-fechar]')) editor.close();
   });
+  function fotoValida(arquivo) {
+    var ok = /^image\/(jpeg|png|webp)$/.test(arquivo.type) && arquivo.size <= FOTO_MAX_BYTES;
+    var erro = $('#foto-erro');
+    erro.textContent = 'Use uma foto JPG, PNG ou WebP de até 20 MB.';
+    erro.hidden = ok;
+    return ok;
+  }
+  function escolherFoto(arquivo) {
+    if (!arquivo || !fotoValida(arquivo)) return;
+    fotoNova = arquivo;
+    $('#foto-previa').src = URL.createObjectURL(arquivo);
+    $('#foto-texto').textContent = arquivo.name;
+    $('#foto-botao-texto').textContent = 'Trocar foto';
+  }
   $('#foto').addEventListener('change', function () {
-    fotoNova = this.files[0] || null;
-    if (fotoNova) $('#foto-previa').src = URL.createObjectURL(fotoNova);
+    escolherFoto(this.files[0]);
+    this.value = '';
   });
-  function reduzirFoto(arquivo) {
+  ['dragover', 'drop'].forEach(function (nome) {
+    editor.addEventListener(nome, function (evento) { evento.preventDefault(); });
+  });
+  var areaFoto = $('#foto-area');
+  ['dragenter', 'dragover'].forEach(function (nome) {
+    areaFoto.addEventListener(nome, function () { areaFoto.classList.add('arrastando'); });
+  });
+  ['dragleave', 'drop'].forEach(function (nome) {
+    areaFoto.addEventListener(nome, function () { areaFoto.classList.remove('arrastando'); });
+  });
+  areaFoto.addEventListener('drop', function (evento) {
+    escolherFoto(evento.dataTransfer.files[0]);
+  });
+  function gerarBlob(tela, tipo) {
+    return new Promise(function (resolver, rejeitar) {
+      tela.toBlob(function (blob) { blob ? resolver(blob) : rejeitar(new Error('foto')); }, tipo, 0.84);
+    });
+  }
+  function padronizarFoto(arquivo) {
     return createImageBitmap(arquivo).then(function (imagem) {
-      var escala = Math.min(1, 1400 / Math.max(imagem.width, imagem.height));
+      var corteL = Math.min(imagem.width, imagem.height * FOTO_PROPORCAO);
+      var corteA = corteL / FOTO_PROPORCAO;
+      var corteX = (imagem.width - corteL) / 2;
+      var corteY = (imagem.height - corteA) * FOTO_FOCO_Y;
       var tela = document.createElement('canvas');
-      tela.width = Math.round(imagem.width * escala);
-      tela.height = Math.round(imagem.height * escala);
-      tela.getContext('2d').drawImage(imagem, 0, 0, tela.width, tela.height);
-      return new Promise(function (resolver, rejeitar) {
-        tela.toBlob(function (blob) { blob ? resolver(blob) : rejeitar(new Error('foto')); }, 'image/webp', 0.82);
+      tela.width = Math.round(Math.min(FOTO_LARGURA, corteL));
+      tela.height = Math.round(tela.width / FOTO_PROPORCAO);
+      var pincel = tela.getContext('2d');
+      pincel.fillStyle = '#ffffff';
+      pincel.fillRect(0, 0, tela.width, tela.height);
+      pincel.imageSmoothingQuality = 'high';
+      pincel.drawImage(imagem, corteX, corteY, corteL, corteA, 0, 0, tela.width, tela.height);
+      return gerarBlob(tela, 'image/webp').then(function (blob) {
+        return blob.type === 'image/webp' ? blob : gerarBlob(tela, 'image/jpeg');
       });
     });
   }
   function enviarFoto(arquivo) {
     if (!arquivo) return Promise.resolve(null);
-    return reduzirFoto(arquivo).then(function (blob) {
-      var nome = crypto.randomUUID() + '.webp';
-      return sb.storage.from(BUCKET).upload(nome, blob, { contentType: 'image/webp' }).then(function (r) {
+    return padronizarFoto(arquivo).then(function (blob) {
+      var nome = crypto.randomUUID() + (blob.type === 'image/webp' ? '.webp' : '.jpg');
+      return sb.storage.from(BUCKET).upload(nome, blob, { contentType: blob.type }).then(function (r) {
         if (r.error) throw r.error;
         return sb.storage.from(BUCKET).getPublicUrl(nome).data.publicUrl;
       });

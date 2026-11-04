@@ -98,10 +98,19 @@
         <button class="fechar" type="button" data-fechar aria-label="Fechar">×</button>
       </div>
       <div class="editor-corpo">
-        <div class="foto-campo">
-          <img id="foto-previa" src="../assets/img/cetim-marfim.webp" alt="" width="120" height="150">
-          <label class="campo">Foto principal (JPG, PNG ou WebP)<input id="foto" type="file" accept="image/jpeg,image/png,image/webp"></label>
+        <div class="foto-campo" id="foto-area">
+          <div class="foto-moldura"><img id="foto-previa" src="../assets/img/cetim-marfim.webp" alt="" width="120" height="150"></div>
+          <div class="foto-info">
+            <strong>Foto principal</strong>
+            <p id="foto-texto">Arraste a foto para cá ou use o botão.</p>
+            <label class="foto-botao">
+              <input id="foto" type="file" accept="image/jpeg,image/png,image/webp">
+              <span id="foto-botao-texto">Escolher foto</span>
+            </label>
+            <p class="foto-dica">JPG, PNG ou WebP. O corte é feito na proporção da loja (4:5), como na prévia.</p>
+          </div>
         </div>
+        <p class="mensagem mensagem-erro" id="foto-erro" role="alert" hidden></p>
         <label class="campo">Nome<input name="nome" required maxlength="120"></label>
         <label class="campo">Descrição<textarea name="descricao" rows="3" maxlength="2000"></textarea></label>
         <div class="duas">
