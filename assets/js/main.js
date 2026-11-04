@@ -1,44 +1,128 @@
 (function () {
-  var ICONES = 'assets/img/icones.svg#';
-  var WHATSAPP = 'https://wa.me/5577988298955';
+  var CONFIG = {
+    url: 'https://ukvivmgyxnuijmglidwm.supabase.co',
+    chave: 'sb_publishable_iYw7NyIVGCRldB_airq5mQ_lDbINTVj',
+    whatsapp: 'https://wa.me/5577988298955'
+  };
   var INSTAGRAM = 'https://www.instagram.com/ellizecollection/';
-  function icone(nome, classe) {
-    return '<svg class="icone ' + (classe || '') + '" aria-hidden="true"><use href="' + ICONES + nome + '"/></svg>';
+  var MAPA = 'https://www.google.com/maps/search/?api=1&query=Rua%20Miguel%20Pinheiro%2C%20968%2C%20Boa%20Vista%2C%20Vit%C3%B3ria%20da%20Conquista%20-%20BA%2C%2045026-445';
+  var ICONES = 'assets/img/icones.svg#';
+  var inicio = document.querySelector('.hero') ? '' : 'index.html';
+  var moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  function dinheiro(centavos) { return moeda.format(centavos / 100); }
+  function esc(texto) {
+    return String(texto).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function icone(nome, linha) {
+    return '<svg class="icone' + (linha ? ' icone-linha' : '') + '" aria-hidden="true"><use href="' + ICONES + nome + '"/></svg>';
   }
 
-  var topo = document.getElementById('topo');
-  if (topo) {
-    topo.outerHTML = '<a class="pular" href="#conteudo">Pular para o conteúdo</a>' +
-      '<p class="aviso">Enviamos para todo o Brasil</p>' +
-      '<header class="cabecalho"><div class="cabecalho-barra">' +
-      '<nav class="menu" aria-label="Menu principal">' +
-      '<button class="botao-icone menu-botao" type="button" aria-expanded="false" aria-controls="menu-lista" aria-label="Abrir menu">' +
-      icone('i-menu', 'icone-linha abrir') + icone('i-fechar', 'icone-linha fechar') + '</button>' +
-      '<ul class="menu-lista" id="menu-lista">' +
-      '<li><a href="loja.html">Comprar</a></li><li><a href="index.html#colecoes">Coleções</a></li>' +
-      '<li><a href="index.html#destaques">Destaques</a></li><li><a href="index.html#marca">A marca</a></li>' +
-      '<li><a href="index.html#loja">Loja física</a></li></ul></nav>' +
-      '<a class="marca" href="index.html" aria-label="Ellize Collection, início"><img src="assets/img/logo.svg" alt="Ellize Collection" width="100" height="50"></a>' +
-      '<div class="cabecalho-acoes">' +
-      '<a class="botao-icone" href="conta.html" aria-label="Minha conta">' + icone('i-usuario', 'icone-linha') + '</a>' +
-      '<a class="botao-icone carrinho-link" href="carrinho.html" aria-label="Carrinho">' + icone('i-sacola', 'icone-linha') +
-      '<span class="carrinho-qtd" data-carrinho-qtd hidden></span></a>' +
-      '<a class="botao botao-vinho botao-comprar" href="loja.html">Comprar</a>' +
-      '</div></div></header>';
+  /* Catálogo público, carregado uma vez por página */
+  var catalogo = null;
+  function produtos() {
+    if (!catalogo) {
+      catalogo = fetch(CONFIG.url + '/rest/v1/products?select=id,slug,name,price_cents,image,sizes,tags,is_sample&order=created_at.desc&limit=200', {
+        headers: { apikey: CONFIG.chave }
+      }).then(function (resposta) {
+        if (!resposta.ok) throw new Error('catalogo');
+        return resposta.json();
+      }).catch(function (erro) {
+        catalogo = null;
+        throw erro;
+      });
+    }
+    return catalogo;
   }
+  function sugestoes(todos, referencia, limite) {
+    var fora = carrinho.ler().map(function (i) { return i.id; }).concat(referencia ? [referencia.id] : []);
+    var livres = todos.filter(function (p) { return fora.indexOf(p.id) === -1; });
+    function parecido(p) {
+      return referencia ? p.tags.filter(function (t) { return referencia.tags.indexOf(t) !== -1; }).length : 0;
+    }
+    return livres.slice().sort(function (a, b) { return parecido(b) - parecido(a); }).slice(0, limite);
+  }
+  function vitrine(lista) {
+    return '<div class="vitrine-grade">' + lista.map(function (p) {
+      return '<a class="vitrine-item" href="produto.html?p=' + encodeURIComponent(p.slug) + '"><img src="' + esc(p.image) + '" alt="" width="160" height="200" loading="lazy">' +
+        '<span>' + esc(p.name) + '</span><span>' + dinheiro(p.price_cents) + '</span></a>';
+    }).join('') + '</div>';
+  }
+
+  /* Barra e rodapé: uma única versão para todas as páginas */
+  var MENU = [
+    { id: 'novidades', rotulo: 'Novidades', vitrine: true, colunas: [
+      ['Categorias', [['Ver todas', 'loja.html'], ['Feminino', 'loja.html?c=feminino'], ['Masculino', 'loja.html?c=masculino'],
+        ['Conjuntos', 'loja.html?c=conjuntos'], ['Vestidos', 'loja.html?c=vestidos'], ['Bolsas', 'loja.html?c=bolsas']]]
+    ] },
+    { id: 'colecoes', rotulo: 'Coleções', colunas: [
+      ['Feminino', [['Ver tudo', 'loja.html?c=feminino'], ['Conjuntos', 'loja.html?c=feminino,conjuntos'], ['Vestidos', 'loja.html?c=feminino,vestidos'], ['Bolsas', 'loja.html?c=feminino,bolsas']]],
+      ['Masculino', [['Ver tudo', 'loja.html?c=masculino'], ['Conjuntos', 'loja.html?c=masculino,conjuntos']]]
+    ] },
+    { id: 'destaques', rotulo: 'Destaques', colunas: [
+      ['Mais procurados', [['Conjuntos', 'loja.html?c=conjuntos'], ['Vestidos', 'loja.html?c=vestidos'], ['Bolsas', 'loja.html?c=bolsas']]],
+      ['Na página inicial', [['Ver destaques', inicio + '#destaques']]]
+    ] },
+    { id: 'marca', rotulo: 'A marca', colunas: [
+      ['Ellize Collection', [['Sobre a marca', inicio + '#marca']]],
+      ['Acompanhe', [['Instagram', INSTAGRAM, true]]]
+    ] },
+    { id: 'loja-fisica', rotulo: 'Loja física', colunas: [
+      ['Visite', [['Endereço e contatos', inicio + '#loja'], ['Como chegar', MAPA, true]]],
+      ['Fale com a gente', [['WhatsApp', CONFIG.whatsapp, true], ['E-mail', 'mailto:lookpremium96@gmail.com']]]
+    ] }
+  ];
+  function htmlMenu() {
+    return MENU.map(function (item) {
+      var colunas = item.colunas.map(function (coluna) {
+        return '<div class="submenu-coluna"><p class="submenu-titulo">' + coluna[0] + '</p>' + coluna[1].map(function (link) {
+          return '<a href="' + esc(link[1]) + '"' + (link[2] ? ' target="_blank" rel="noopener"' : '') + '>' + link[0] + '</a>';
+        }).join('') + '</div>';
+      }).join('');
+      var extra = item.vitrine ? '<div class="submenu-vitrine" data-vitrine hidden><p class="submenu-titulo">Chegaram agora</p></div>' : '';
+      return '<li class="menu-item"><button class="menu-gatilho" type="button" aria-expanded="false" aria-controls="sub-' + item.id + '">' + item.rotulo + '</button>' +
+        '<div class="painel-barra submenu" id="sub-' + item.id + '" hidden>' + colunas + extra + '</div></li>';
+    }).join('');
+  }
+
+  document.getElementById('topo').outerHTML =
+    '<a class="pular" href="#conteudo">Pular para o conteúdo</a>' +
+    '<p class="aviso">Enviamos para todo o Brasil</p>' +
+    '<header class="cabecalho"><div class="cabecalho-barra">' +
+    '<nav class="menu" aria-label="Menu principal">' +
+    '<button class="botao-icone menu-botao" type="button" aria-expanded="false" aria-controls="menu-lista" aria-label="Abrir menu">' +
+    '<svg class="icone icone-linha abrir" aria-hidden="true"><use href="' + ICONES + 'i-menu"/></svg>' +
+    '<svg class="icone icone-linha fechar" aria-hidden="true"><use href="' + ICONES + 'i-fechar"/></svg></button>' +
+    '<ul class="menu-lista" id="menu-lista">' + htmlMenu() + '</ul></nav>' +
+    '<a class="marca" href="' + (inicio || '#conteudo') + '" aria-label="Ellize Collection, início"><img src="assets/img/logo.svg" alt="Ellize Collection" width="100" height="50"></a>' +
+    '<div class="cabecalho-acoes">' +
+    '<a class="botao-icone" href="conta.html" aria-label="Minha conta">' + icone('i-usuario', true) + '</a>' +
+    '<button class="botao-icone carrinho-link" type="button" data-abrir-sacola aria-label="Abrir sacola">' + icone('i-sacola', true) +
+    '<span class="carrinho-qtd" data-carrinho-qtd hidden></span></button>' +
+    '<button class="botao-icone busca-botao" type="button" aria-expanded="false" aria-controls="busca" aria-label="Abrir busca">' + icone('i-busca', true) + '</button>' +
+    '</div></div>' +
+    '<form class="painel-barra busca" id="busca" action="loja.html" role="search" hidden>' +
+    '<div class="busca-campo">' + icone('i-busca', true) +
+    '<input type="search" name="q" placeholder="Buscar peças" aria-label="Buscar na loja" maxlength="60" autocomplete="off">' +
+    '<button class="botao botao-vinho" type="submit">Buscar</button></div>' +
+    '<div class="busca-sugestoes"><span>Sugestões:</span><a href="loja.html?c=vestidos">Vestidos</a><a href="loja.html?c=conjuntos">Conjuntos</a><a href="loja.html?c=bolsas">Bolsas</a></div>' +
+    '<div class="busca-resultados" aria-live="polite"></div></form></header>';
+
   var rodape = document.getElementById('rodape');
-  if (rodape) {
-    rodape.outerHTML = '<footer class="rodape sobre-escuro"><div class="container"><div class="rodape-grade">' +
-      '<div class="rodape-marca"><img class="rodape-logo" src="assets/img/logo-claro.svg" alt="Ellize Collection" width="190" height="95" loading="lazy"></div>' +
-      '<nav aria-label="Site"><h2>Site</h2><ul><li><a href="loja.html">Comprar</a></li><li><a href="index.html#colecoes">Coleções</a></li>' +
-      '<li><a href="index.html#marca">A marca</a></li><li><a href="index.html#loja">Loja física</a></li><li><a href="conta.html">Minha conta</a></li></ul></nav>' +
-      '<div><h2>Contato</h2><ul><li><a href="' + WHATSAPP + '" target="_blank" rel="noopener">WhatsApp</a></li>' +
-      '<li><a href="' + INSTAGRAM + '" target="_blank" rel="noopener">Instagram</a></li>' +
-      '<li><a href="mailto:lookpremium96@gmail.com">E-mail</a></li></ul></div></div>' +
-      '<p class="rodape-base">© 2026 Ellize Collection. Todos os direitos reservados.</p></div></footer>' +
-      '<a class="fab" href="' + WHATSAPP + '?text=Ol%C3%A1!%20Vim%20pelo%20site%20da%20Ellize%20Collection." target="_blank" rel="noopener" aria-label="Falar pelo WhatsApp">' + icone('i-whatsapp') + '</a>';
-  }
+  if (rodape) rodape.outerHTML =
+    '<footer class="rodape sobre-escuro"><div class="container"><div class="rodape-grade">' +
+    '<div class="rodape-marca"><img class="rodape-logo" src="assets/img/logo-claro.svg" alt="Ellize Collection" width="190" height="95" loading="lazy"></div>' +
+    '<nav aria-label="Site"><h2>Site</h2><ul><li><a href="loja.html">Novidades</a></li><li><a href="' + inicio + '#colecoes">Coleções</a></li>' +
+    '<li><a href="' + inicio + '#marca">A marca</a></li><li><a href="' + inicio + '#loja">Loja física</a></li><li><a href="conta.html">Minha conta</a></li></ul></nav>' +
+    '<div><h2>Contato</h2><ul><li><a href="' + CONFIG.whatsapp + '" target="_blank" rel="noopener">WhatsApp</a></li>' +
+    '<li><a href="' + INSTAGRAM + '" target="_blank" rel="noopener">Instagram</a></li>' +
+    '<li><a href="mailto:lookpremium96@gmail.com">E-mail</a></li></ul></div></div>' +
+    '<p class="rodape-base">© 2026 Ellize Collection. Todos os direitos reservados.</p></div></footer>' +
+    '<a class="fab" href="' + CONFIG.whatsapp + '?text=Ol%C3%A1!%20Vim%20pelo%20site%20da%20Ellize%20Collection." target="_blank" rel="noopener" aria-label="Falar pelo WhatsApp">' + icone('i-whatsapp') + '</a>';
 
+  /* Dados da sacola */
   var CHAVE = 'ellize-carrinho';
   var carrinho = {
     ler: function () {
@@ -50,6 +134,7 @@
     salvar: function (itens) {
       try { localStorage.setItem(CHAVE, JSON.stringify(itens)); } catch (erro) {}
       carrinho.atualizarSelo();
+      document.dispatchEvent(new CustomEvent('ellize:sacola'));
     },
     adicionar: function (id, tamanho, quantidade) {
       var itens = carrinho.ler();
@@ -65,7 +150,7 @@
         selo.hidden = total === 0;
       });
       document.querySelectorAll('.carrinho-link').forEach(function (link) {
-        link.setAttribute('aria-label', total ? 'Carrinho, ' + total + (total === 1 ? ' item' : ' itens') : 'Carrinho');
+        link.setAttribute('aria-label', total ? 'Abrir sacola, ' + total + (total === 1 ? ' item' : ' itens') : 'Abrir sacola');
       });
     }
   };
@@ -73,34 +158,207 @@
   carrinho.atualizarSelo();
   window.addEventListener('storage', carrinho.atualizarSelo);
 
+  /* Gaveta da sacola */
+  document.body.insertAdjacentHTML('beforeend',
+    '<dialog class="sacola" id="sacola" aria-labelledby="sacola-titulo">' +
+    '<div class="sacola-topo"><h2 id="sacola-titulo">Sacola</h2>' +
+    '<button class="botao-icone" type="button" data-fechar-sacola aria-label="Fechar sacola">' + icone('i-fechar', true) + '</button></div>' +
+    '<div class="sacola-corpo" id="sacola-corpo"></div><div class="sacola-rodape" id="sacola-rodape"></div></dialog>');
+  var sacola = document.getElementById('sacola');
+  var sacolaCorpo = document.getElementById('sacola-corpo');
+  var sacolaRodape = document.getElementById('sacola-rodape');
+  var sacolaTitulo = document.getElementById('sacola-titulo');
+
+  function linhaHTML(p, tamanho) {
+    return '<a href="produto.html?p=' + encodeURIComponent(p.slug) + '">' + esc(p.name) + '</a>' +
+      '<span>Tamanho ' + esc(tamanho) + '</span><span>' + dinheiro(p.price_cents) + '</span>';
+  }
+  function desenharLista() {
+    sacolaTitulo.textContent = 'Sacola';
+    sacolaRodape.innerHTML = '';
+    sacolaCorpo.innerHTML = '<p>Carregando sacola…</p>';
+    produtos().then(function (todos) {
+      var mapa = {};
+      todos.forEach(function (p) { mapa[p.id] = p; });
+      var itens = carrinho.ler();
+      var validos = itens.filter(function (i) { return mapa[i.id] && mapa[i.id].sizes.indexOf(i.size) !== -1; });
+      if (validos.length !== itens.length) carrinho.salvar(validos);
+      if (!validos.length) {
+        sacolaCorpo.innerHTML = '<div class="estado"><h2>Sua sacola está vazia</h2><p>Escolha suas peças nas novidades.</p><a class="botao botao-vinho" href="loja.html">Ver novidades</a></div>';
+        return;
+      }
+      var total = validos.reduce(function (soma, i) { return soma + i.qty * mapa[i.id].price_cents; }, 0);
+      sacolaCorpo.innerHTML = '<ul class="linhas">' + validos.map(function (i, n) {
+        var p = mapa[i.id];
+        return '<li class="linha"><img src="' + esc(p.image) + '" alt="" width="72" height="90"><div class="linha-info">' + linhaHTML(p, i.size) + '</div>' +
+          '<div class="linha-acoes"><div class="passo">' +
+          '<button type="button" data-acao="menos" data-n="' + n + '" aria-label="Diminuir quantidade de ' + esc(p.name) + '"' + (i.qty <= 1 ? ' disabled' : '') + '>−</button>' +
+          '<span aria-live="polite">' + i.qty + '</span>' +
+          '<button type="button" data-acao="mais" data-n="' + n + '" aria-label="Aumentar quantidade de ' + esc(p.name) + '"' + (i.qty >= 10 ? ' disabled' : '') + '>+</button></div>' +
+          '<button class="botao-icone" type="button" data-acao="remover" data-n="' + n + '" aria-label="Remover ' + esc(p.name) + '">' + icone('i-lixo', true) + '</button></div></li>';
+      }).join('') + '</ul>';
+      sacolaRodape.innerHTML = '<p class="sacola-valor"><span>Subtotal</span><strong>' + dinheiro(total) + '</strong></p>' +
+        '<p class="sacola-valor"><span>Frete</span><strong>Combinado com a loja</strong></p>' +
+        '<p class="sacola-valor sacola-total"><span>Valor total</span><strong>' + dinheiro(total) + '</strong></p>' +
+        '<a class="botao botao-vinho botao-largo" href="carrinho.html">Finalizar compra</a>';
+    }).catch(function () {
+      sacolaCorpo.innerHTML = '<div class="estado"><h2>Não foi possível carregar</h2><p>Verifique sua conexão e tente novamente.</p></div>';
+    });
+  }
+  function abrirSacola() {
+    fecharTudo();
+    if (!sacola.open) sacola.showModal();
+  }
+  function adicionar(p, tamanho) {
+    carrinho.adicionar(p.id, tamanho, 1);
+    abrirSacola();
+    sacolaTitulo.textContent = 'Produto adicionado à sacola';
+    sacolaCorpo.innerHTML = '<div class="linha"><img src="' + esc(p.image) + '" alt="" width="72" height="90"><div class="linha-info">' + linhaHTML(p, tamanho) + '</div></div>' +
+      '<div class="sacola-sugestao" id="sacola-sugestao" hidden><h3>Você pode gostar</h3></div>';
+    sacolaRodape.innerHTML = '<button class="botao botao-vinho botao-largo" type="button" data-ver-sacola>Ver sacola</button>';
+    produtos().then(function (todos) {
+      var caixa = document.getElementById('sacola-sugestao');
+      var lista = sugestoes(todos, p, 3);
+      if (!caixa || !lista.length) return;
+      caixa.insertAdjacentHTML('beforeend', vitrine(lista));
+      caixa.hidden = false;
+    }).catch(function () {});
+  }
+  document.addEventListener('click', function (evento) {
+    if (evento.target.closest('[data-abrir-sacola]')) { abrirSacola(); desenharLista(); }
+  });
+  sacola.addEventListener('click', function (evento) {
+    if (evento.target === sacola || evento.target.closest('[data-fechar-sacola]')) { sacola.close(); return; }
+    if (evento.target.closest('[data-ver-sacola]')) { desenharLista(); return; }
+    var botao = evento.target.closest('[data-acao]');
+    if (!botao) return;
+    var itens = carrinho.ler();
+    var item = itens[+botao.dataset.n];
+    if (!item) return;
+    if (botao.dataset.acao === 'mais') item.qty = Math.min(10, item.qty + 1);
+    if (botao.dataset.acao === 'menos') item.qty = Math.max(1, item.qty - 1);
+    if (botao.dataset.acao === 'remover') itens.splice(+botao.dataset.n, 1);
+    carrinho.salvar(itens);
+    desenharLista();
+  });
+
+  window.Ellize = {
+    config: CONFIG, esc: esc, dinheiro: dinheiro, icone: icone,
+    produtos: produtos, sugestoes: sugestoes, adicionar: adicionar
+  };
+
+  /* Menu e submenus */
   var botao = document.querySelector('.menu-botao');
   var lista = document.getElementById('menu-lista');
   var compacto = window.matchMedia('(max-width: 959.98px)');
+  var comMouse = window.matchMedia('(hover: hover) and (min-width: 960px)');
+  var gatilhos = lista.querySelectorAll('.menu-gatilho');
+  var buscaBotao = document.querySelector('.busca-botao');
+  var busca = document.getElementById('busca');
+  var buscaCampo = busca.querySelector('input');
+  var buscaResultados = busca.querySelector('.busca-resultados');
+  var tempoFechar;
 
+  function definirSubmenu(gatilho, aberto) {
+    gatilho.setAttribute('aria-expanded', String(aberto));
+    document.getElementById(gatilho.getAttribute('aria-controls')).hidden = !aberto;
+    if (aberto) preencherVitrine(gatilho);
+  }
+  function fecharSubmenus(exceto) {
+    gatilhos.forEach(function (g) { if (g !== exceto) definirSubmenu(g, false); });
+  }
+  function preencherVitrine(gatilho) {
+    var caixa = document.getElementById(gatilho.getAttribute('aria-controls')).querySelector('[data-vitrine]');
+    if (!caixa || caixa.dataset.pronta) return;
+    caixa.dataset.pronta = '1';
+    produtos().then(function (todos) {
+      if (!todos.length) return;
+      caixa.insertAdjacentHTML('beforeend', vitrine(todos.slice(0, 3)));
+      caixa.hidden = false;
+    }).catch(function () { delete caixa.dataset.pronta; });
+  }
+  function definirBusca(aberta) {
+    busca.hidden = !aberta;
+    buscaBotao.setAttribute('aria-expanded', String(aberta));
+    buscaBotao.setAttribute('aria-label', aberta ? 'Fechar busca' : 'Abrir busca');
+    if (aberta) buscaCampo.focus();
+  }
   function definirMenu(aberto) {
     botao.setAttribute('aria-expanded', String(aberto));
     botao.setAttribute('aria-label', aberto ? 'Fechar menu' : 'Abrir menu');
     lista.classList.toggle('aberta', aberto);
     document.body.classList.toggle('menu-aberto', aberto);
+    if (!aberto) fecharSubmenus();
+  }
+  function fecharTudo() {
+    fecharSubmenus();
+    definirBusca(false);
+    definirMenu(false);
   }
 
   botao.addEventListener('click', function () {
-    definirMenu(botao.getAttribute('aria-expanded') !== 'true');
+    var abrir = botao.getAttribute('aria-expanded') !== 'true';
+    definirBusca(false);
+    definirMenu(abrir);
+  });
+  gatilhos.forEach(function (gatilho) {
+    var item = gatilho.parentElement;
+    gatilho.addEventListener('click', function (evento) {
+      var aberto = gatilho.getAttribute('aria-expanded') === 'true';
+      var mouse = comMouse.matches && evento.detail > 0;
+      definirBusca(false);
+      fecharSubmenus(gatilho);
+      definirSubmenu(gatilho, mouse ? true : !aberto);
+    });
+    item.addEventListener('mouseenter', function () {
+      if (!comMouse.matches) return;
+      clearTimeout(tempoFechar);
+      definirBusca(false);
+      fecharSubmenus(gatilho);
+      definirSubmenu(gatilho, true);
+    });
+    item.addEventListener('mouseleave', function () {
+      if (!comMouse.matches) return;
+      tempoFechar = setTimeout(function () { definirSubmenu(gatilho, false); }, 180);
+    });
   });
   lista.addEventListener('click', function (evento) {
-    if (evento.target.closest('a')) definirMenu(false);
+    if (evento.target.closest('a')) fecharTudo();
   });
+
+  buscaBotao.addEventListener('click', function () {
+    var abrir = busca.hidden;
+    fecharSubmenus();
+    definirMenu(false);
+    definirBusca(abrir);
+  });
+  buscaCampo.value = new URLSearchParams(location.search).get('q') || '';
+  buscaCampo.addEventListener('input', function () {
+    var termo = buscaCampo.value.trim().toLowerCase();
+    if (termo.length < 2) { buscaResultados.innerHTML = ''; return; }
+    produtos().then(function (todos) {
+      if (buscaCampo.value.trim().toLowerCase() !== termo) return;
+      var achados = todos.filter(function (p) { return p.name.toLowerCase().indexOf(termo) !== -1; }).slice(0, 4);
+      buscaResultados.innerHTML = achados.length ? vitrine(achados) : '<p class="nota-pequena">Nenhuma peça encontrada.</p>';
+    }).catch(function () {});
+  });
+  busca.addEventListener('submit', function (evento) {
+    if (!buscaCampo.value.trim()) { evento.preventDefault(); buscaCampo.focus(); }
+  });
+
   document.addEventListener('keydown', function (evento) {
-    if (evento.key === 'Escape' && botao.getAttribute('aria-expanded') === 'true') {
-      definirMenu(false);
-      botao.focus();
-    }
+    if (evento.key !== 'Escape' || sacola.open) return;
+    var gatilhoAberto = lista.querySelector('.menu-gatilho[aria-expanded="true"]');
+    if (!busca.hidden) { definirBusca(false); buscaBotao.focus(); return; }
+    if (gatilhoAberto) { definirSubmenu(gatilhoAberto, false); gatilhoAberto.focus(); return; }
+    if (botao.getAttribute('aria-expanded') === 'true') { definirMenu(false); botao.focus(); }
   });
   document.addEventListener('click', function (evento) {
-    if (!evento.target.closest('.cabecalho')) definirMenu(false);
+    if (!evento.target.closest('.cabecalho')) fecharTudo();
   });
-  compacto.addEventListener('change', function () { definirMenu(false); });
+  compacto.addEventListener('change', fecharTudo);
 
+  /* Entrada suave */
   var itens = document.querySelectorAll('.revelar');
   if (!('IntersectionObserver' in window)) {
     itens.forEach(function (item) { item.classList.add('visivel'); });

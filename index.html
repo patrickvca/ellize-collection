@@ -19,6 +19,7 @@
   <link rel="preload" as="image" href="assets/img/cetim-hero.webp" type="image/webp" fetchpriority="high">
   <link rel="stylesheet" href="assets/css/tokens.css">
   <link rel="stylesheet" href="assets/css/site.css">
+  <link rel="stylesheet" href="assets/css/store.css">
   <script>document.documentElement.classList.add('js')</script>
   <script type="application/ld+json">
   {
@@ -43,40 +44,7 @@
   </script>
 </head>
 <body>
-  <a class="pular" href="#conteudo">Pular para o conteúdo</a>
-
-  <p class="aviso">Enviamos para todo o Brasil</p>
-
-  <header class="cabecalho">
-    <div class="cabecalho-barra">
-      <nav class="menu" aria-label="Menu principal">
-        <button class="botao-icone menu-botao" type="button" aria-expanded="false" aria-controls="menu-lista" aria-label="Abrir menu">
-          <svg class="icone icone-linha abrir" aria-hidden="true"><use href="assets/img/icones.svg#i-menu"/></svg>
-          <svg class="icone icone-linha fechar" aria-hidden="true"><use href="assets/img/icones.svg#i-fechar"/></svg>
-        </button>
-        <ul class="menu-lista" id="menu-lista">
-          <li><a href="loja.html">Comprar</a></li>
-          <li><a href="#colecoes">Coleções</a></li>
-          <li><a href="#destaques">Destaques</a></li>
-          <li><a href="#marca">A marca</a></li>
-          <li><a href="#loja">Loja física</a></li>
-        </ul>
-      </nav>
-      <a class="marca" href="#conteudo" aria-label="Ellize Collection, início">
-        <img src="assets/img/logo.svg" alt="Ellize Collection" width="100" height="50">
-      </a>
-      <div class="cabecalho-acoes">
-        <a class="botao-icone" href="conta.html" aria-label="Minha conta">
-          <svg class="icone icone-linha" aria-hidden="true"><use href="assets/img/icones.svg#i-usuario"/></svg>
-        </a>
-        <a class="botao-icone carrinho-link" href="carrinho.html" aria-label="Carrinho">
-          <svg class="icone icone-linha" aria-hidden="true"><use href="assets/img/icones.svg#i-sacola"/></svg>
-          <span class="carrinho-qtd" data-carrinho-qtd hidden></span>
-        </a>
-        <a class="botao botao-vinho botao-comprar" href="loja.html">Comprar</a>
-      </div>
-    </div>
-  </header>
+  <div id="topo"></div>
 
   <main id="conteudo">
     <section class="hero sobre-escuro">
@@ -226,7 +194,7 @@
         <nav aria-label="Site">
           <h2>Site</h2>
           <ul>
-            <li><a href="loja.html">Comprar</a></li>
+            <li><a href="loja.html">Novidades</a></li>
             <li><a href="#colecoes">Coleções</a></li>
             <li><a href="#marca">A marca</a></li>
             <li><a href="#loja">Loja física</a></li>

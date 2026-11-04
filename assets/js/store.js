@@ -1,8 +1,7 @@
 (function () {
-  var URL_SUPABASE = 'https://ukvivmgyxnuijmglidwm.supabase.co';
-  var CHAVE_PUBLICA = 'sb_publishable_iYw7NyIVGCRldB_airq5mQ_lDbINTVj';
-  var WHATSAPP = 'https://wa.me/5577988298955';
-  var ICONES = 'assets/img/icones.svg#';
+  var URL_SUPABASE = window.Ellize.config.url;
+  var CHAVE_PUBLICA = window.Ellize.config.chave;
+  var WHATSAPP = window.Ellize.config.whatsapp;
   var FILTROS = [
     ['', 'Todos'], ['feminino', 'Feminino'], ['masculino', 'Masculino'],
     ['conjuntos', 'Conjuntos'], ['vestidos', 'Vestidos'], ['bolsas', 'Bolsas']
@@ -17,18 +16,11 @@
     auth: { flowType: 'pkce', persistSession: true, detectSessionInUrl: true }
   });
   var carrinho = window.EllizeCarrinho;
-  var moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
   var parametros = new URLSearchParams(location.search);
 
-  function dinheiro(centavos) { return moeda.format(centavos / 100); }
-  function esc(texto) {
-    return String(texto).replace(/[&<>"']/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
-  }
-  function icone(nome, linha) {
-    return '<svg class="icone' + (linha ? ' icone-linha' : '') + '" aria-hidden="true"><use href="' + ICONES + nome + '"/></svg>';
-  }
+  var dinheiro = window.Ellize.dinheiro;
+  var esc = window.Ellize.esc;
+  var icone = window.Ellize.icone;
   function $(seletor) { return document.querySelector(seletor); }
   function estado(titulo, texto, acao) {
     return '<div class="estado"><h2>' + esc(titulo) + '</h2>' + (texto ? '<p>' + esc(texto) + '</p>' : '') + (acao || '') + '</div>';
@@ -36,19 +28,6 @@
   function erroCarregar() {
     return estado('Não foi possível carregar', 'Verifique sua conexão e tente novamente.',
       '<a class="botao botao-vinho" href="' + esc(location.pathname.split('/').pop() + location.search) + '">Tentar novamente</a>');
-  }
-  function avisar(mensagem) {
-    var aviso = $('.toast');
-    if (!aviso) {
-      aviso = document.createElement('div');
-      aviso.className = 'toast';
-      aviso.setAttribute('role', 'status');
-      document.body.appendChild(aviso);
-    }
-    aviso.innerHTML = '<span>' + esc(mensagem) + '</span><a href="carrinho.html">Ver carrinho</a>';
-    aviso.classList.add('visivel');
-    clearTimeout(avisar.tempo);
-    avisar.tempo = setTimeout(function () { aviso.classList.remove('visivel'); }, 4000);
   }
   function selo(produto) {
     return produto.is_sample ? '<span class="selo-exemplo">Exemplo</span>' : '';
@@ -79,70 +58,147 @@
   }
 
   /* Catálogo */
+  var NOMES = { feminino: 'Feminino', masculino: 'Masculino', conjuntos: 'Conjuntos', vestidos: 'Vestidos', bolsas: 'Bolsas' };
+
+  function trilha(itens) {
+    return '<nav class="trilha" aria-label="Você está em"><ol>' + itens.map(function (item, n) {
+      var ultimo = n === itens.length - 1;
+      return '<li>' + (ultimo ? '<span aria-current="page">' + esc(item[0]) + '</span>' : '<a href="' + item[1] + '">' + esc(item[0]) + '</a>') + '</li>';
+    }).join('') + '</ol></nav>';
+  }
+  function cartao(p) {
+    var link = 'produto.html?p=' + encodeURIComponent(p.slug);
+    return '<article class="produto" data-id="' + esc(p.id) + '">' +
+      '<div class="produto-foto"><a href="' + link + '" tabindex="-1" aria-hidden="true"><img src="' + esc(p.image) + '" alt="" width="800" height="1000" loading="lazy"></a>' + selo(p) +
+      '<div class="compra-rapida"><button class="rapida-botao" type="button" data-rapida>Compra rápida</button>' +
+      '<div class="rapida-tamanhos" hidden>' + p.sizes.map(function (t) {
+        return '<button type="button" data-tamanho="' + esc(t) + '" aria-label="Adicionar ' + esc(p.name) + ', tamanho ' + esc(t) + '">' + esc(t) + '</button>';
+      }).join('') + '</div></div></div>' +
+      '<a class="produto-info" href="' + link + '"><span class="produto-nome">' + esc(p.name) + '</span>' +
+      '<span class="produto-preco">' + dinheiro(p.price_cents) + '</span></a></article>';
+  }
+  function ativarCompraRapida(raiz, mapa) {
+    raiz.addEventListener('click', function (evento) {
+      var cartaoAtual = evento.target.closest('.produto');
+      if (!cartaoAtual) return;
+      var p = mapa[cartaoAtual.dataset.id];
+      var rapida = evento.target.closest('[data-rapida]');
+      var tamanho = evento.target.closest('[data-tamanho]');
+      if (rapida) {
+        if (p.sizes.length === 1) { window.Ellize.adicionar(p, p.sizes[0]); return; }
+        rapida.hidden = true;
+        var opcoes = cartaoAtual.querySelector('.rapida-tamanhos');
+        opcoes.hidden = false;
+        opcoes.querySelector('button').focus();
+      }
+      if (tamanho) window.Ellize.adicionar(p, tamanho.dataset.tamanho);
+    });
+  }
+
   function iniciarLoja() {
-    var filtro = parametros.get('c') || '';
-    if (!FILTROS.some(function (f) { return f[0] === filtro; })) filtro = '';
+    var pedidas = (parametros.get('c') || '').split(',').filter(function (t) { return NOMES[t]; });
+    var busca = (parametros.get('q') || '').trim().slice(0, 60);
+    var titulo = busca ? 'Resultados para "' + busca + '"'
+      : pedidas.length ? pedidas.map(function (t) { return NOMES[t]; }).join(' · ') : 'Novidades';
+    var filtroAtual = !busca && pedidas.length < 2 ? (pedidas[0] || '') : null;
+    var lista = [];
+    var mapa = {};
+    var grade = $('#produtos');
+    var campoTamanho = $('#filtro-tamanho');
+    var campoOrdem = $('#ordem');
+
+    document.title = titulo + ' | Ellize Collection';
+    $('#titulo').textContent = titulo;
+    $('#trilha').innerHTML = trilha(pedidas.length || busca
+      ? [['Início', 'index.html'], ['Novidades', 'loja.html'], [titulo]]
+      : [['Início', 'index.html'], ['Novidades']]);
     $('#filtros').innerHTML = FILTROS.map(function (f) {
       var href = f[0] ? 'loja.html?c=' + f[0] : 'loja.html';
-      return '<a class="filtro" href="' + href + '"' + (f[0] === filtro ? ' aria-current="page"' : '') + '>' + f[1] + '</a>';
+      return '<a class="filtro" href="' + href + '"' + (f[0] === filtroAtual ? ' aria-current="page"' : '') + '>' + f[1] + '</a>';
     }).join('');
 
-    var consulta = sb.from('products').select('*').order('created_at');
-    if (filtro) consulta = consulta.contains('tags', [filtro]);
+    function desenhar() {
+      var tamanho = campoTamanho.value;
+      var ordem = campoOrdem.value;
+      var itens = lista.filter(function (p) { return !tamanho || p.sizes.indexOf(tamanho) !== -1; });
+      if (ordem === 'menor') itens.sort(function (a, b) { return a.price_cents - b.price_cents; });
+      if (ordem === 'maior') itens.sort(function (a, b) { return b.price_cents - a.price_cents; });
+      $('#contagem').textContent = itens.length + (itens.length === 1 ? ' produto' : ' produtos');
+      grade.innerHTML = itens.length ? itens.map(cartao).join('') : estado(
+        busca ? 'Nenhuma peça encontrada' : 'Nenhuma peça por aqui',
+        busca ? 'Tente outra palavra ou veja todas as novidades.' : 'Veja as outras categorias da loja.',
+        '<a class="botao botao-vinho" href="loja.html">Ver novidades</a>');
+    }
+
+    var consulta = sb.from('products').select('*').order('created_at', { ascending: false });
+    if (pedidas.length) consulta = consulta.contains('tags', pedidas);
+    if (busca) consulta = consulta.ilike('name', '%' + busca.replace(/[%_\\]/g, '\\$&') + '%');
     consulta.then(function (resposta) {
-      var grade = $('#produtos');
       grade.setAttribute('aria-busy', 'false');
-      if (resposta.error) { grade.outerHTML = erroCarregar(); return; }
-      var produtos = resposta.data;
-      if (!produtos.length) {
-        grade.outerHTML = estado('Nenhuma peça por aqui', 'Veja as outras categorias da loja.', '<a class="botao botao-vinho" href="loja.html">Ver todos</a>');
-        return;
-      }
-      if (produtos.some(function (p) { return p.is_sample; })) $('#nota-exemplo').hidden = false;
-      grade.innerHTML = produtos.map(function (p) {
-        return '<a class="produto" href="produto.html?p=' + encodeURIComponent(p.slug) + '">' +
-          '<span class="produto-foto"><img src="' + esc(p.image) + '" alt="" width="800" height="1000" loading="lazy">' + selo(p) + '</span>' +
-          '<span class="produto-nome">' + esc(p.name) + '</span>' +
-          '<span class="produto-preco">' + dinheiro(p.price_cents) + '</span></a>';
-      }).join('');
-    }, function () { $('#produtos').outerHTML = erroCarregar(); });
+      if (resposta.error) { grade.innerHTML = erroCarregar(); return; }
+      lista = resposta.data;
+      lista.forEach(function (p) { mapa[p.id] = p; });
+      if (lista.some(function (p) { return p.is_sample; })) $('#nota-exemplo').hidden = false;
+      var tamanhos = [];
+      lista.forEach(function (p) {
+        p.sizes.forEach(function (t) { if (tamanhos.indexOf(t) === -1) tamanhos.push(t); });
+      });
+      campoTamanho.insertAdjacentHTML('beforeend', tamanhos.map(function (t) {
+        return '<option value="' + esc(t) + '">' + esc(t) + '</option>';
+      }).join(''));
+      campoTamanho.addEventListener('change', desenhar);
+      campoOrdem.addEventListener('change', desenhar);
+      ativarCompraRapida(grade, mapa);
+      desenhar();
+    }, function () { grade.innerHTML = erroCarregar(); });
   }
 
   /* Produto */
   function iniciarProduto() {
     var alvo = $('#produto');
     var slug = parametros.get('p');
-    var naoAchou = estado('Peça não encontrada', 'Ela pode ter saído da loja.', '<a class="botao botao-vinho" href="loja.html">Ver a loja</a>');
+    var naoAchou = estado('Peça não encontrada', 'Ela pode ter saído da loja.', '<a class="botao botao-vinho" href="loja.html">Ver novidades</a>');
     if (!slug) { alvo.innerHTML = naoAchou; return; }
     sb.from('products').select('*').eq('slug', slug).maybeSingle().then(function (resposta) {
       if (resposta.error) { alvo.innerHTML = erroCarregar(); return; }
       var p = resposta.data;
       if (!p) { alvo.innerHTML = naoAchou; return; }
       document.title = p.name + ' | Ellize Collection';
+      var categoria = p.tags.filter(function (t) { return NOMES[t]; }).pop();
+      $('#trilha').innerHTML = trilha([['Início', 'index.html'], ['Novidades', 'loja.html']]
+        .concat(categoria ? [[NOMES[categoria], 'loja.html?c=' + categoria]] : []).concat([[p.name]]));
       var unico = p.sizes.length === 1;
       alvo.innerHTML =
         '<div class="detalhe-foto"><img src="' + esc(p.image) + '" alt="" width="800" height="1000">' + selo(p) + '</div>' +
         '<form class="detalhe-info" id="form-produto" novalidate>' +
-        '<a class="voltar" href="loja.html">Voltar para a loja</a>' +
         '<h1>' + esc(p.name) + '</h1>' +
         '<p class="detalhe-preco">' + dinheiro(p.price_cents) + '</p>' +
-        '<p class="detalhe-texto">' + esc(p.description) + '</p>' +
         '<fieldset class="tamanhos"><legend>Tamanho</legend>' + p.sizes.map(function (t) {
           return '<label><input type="radio" name="tamanho" value="' + esc(t) + '"' + (unico ? ' checked' : '') + '><span>' + esc(t) + '</span></label>';
         }).join('') + '</fieldset>' +
-        '<p class="campo-erro" id="erro-tamanho" role="alert" hidden>Escolha um tamanho.</p>' +
-        '<button class="botao botao-vinho botao-largo" type="submit">Adicionar ao carrinho</button>' +
+        '<p class="campo-erro" id="erro-tamanho" role="alert" hidden>Selecione um tamanho.</p>' +
+        '<button class="botao botao-vinho botao-largo" type="submit">Adicionar à sacola</button>' +
         '<a class="botao botao-linha botao-largo" target="_blank" rel="noopener" href="' + WHATSAPP + '?text=' +
         encodeURIComponent('Olá! Tenho uma dúvida sobre: ' + p.name) + '">' + icone('i-whatsapp') + 'Tirar dúvida no WhatsApp</a>' +
+        '<div class="sanfona"><details open><summary>Sobre a peça</summary><p>' + esc(p.description) + '</p></details>' +
+        '<details><summary>Entrega</summary><p>Enviamos para todo o Brasil, e você também pode retirar na loja em Vitória da Conquista. O frete é combinado com a loja pelo WhatsApp.</p></details></div>' +
         '</form>';
       $('#form-produto').addEventListener('submit', function (evento) {
         evento.preventDefault();
         var escolhido = this.querySelector('input[name="tamanho"]:checked');
         $('#erro-tamanho').hidden = !!escolhido;
-        if (!escolhido) return;
-        carrinho.adicionar(p.id, escolhido.value, 1);
-        avisar(p.name + ' adicionado ao carrinho.');
+        if (escolhido) window.Ellize.adicionar(p, escolhido.value);
       });
+      window.Ellize.produtos().then(function (todos) {
+        var parecidos = window.Ellize.sugestoes(todos, p, 4);
+        if (!parecidos.length) return;
+        var mapa = {};
+        parecidos.forEach(function (item) { mapa[item.id] = item; });
+        var caixa = $('#relacionados');
+        caixa.innerHTML = '<h2>Você pode gostar</h2><div class="produtos">' + parecidos.map(cartao).join('') + '</div>';
+        caixa.hidden = false;
+        ativarCompraRapida(caixa, mapa);
+      }, function () {});
     }, function () { alvo.innerHTML = erroCarregar(); });
   }
 
@@ -158,7 +214,7 @@
       return linhasValidas().reduce(function (soma, i) { return soma + i.qty * produtos[i.id].price_cents; }, 0);
     }
     function desenharVazio() {
-      alvo.innerHTML = estado('Seu carrinho está vazio', 'Escolha suas peças na loja.', '<a class="botao botao-vinho" href="loja.html">Ver a loja</a>');
+      alvo.innerHTML = estado('Sua sacola está vazia', 'Escolha suas peças nas novidades.', '<a class="botao botao-vinho" href="loja.html">Ver novidades</a>');
     }
     function desenharLinhas() {
       var linhas = linhasValidas();
@@ -179,7 +235,7 @@
     function desenharFechamento(sessao) {
       var caixa = $('#fechamento');
       if (!sessao) {
-        caixa.innerHTML = '<p>Entre na sua conta para fechar o pedido. Seu carrinho fica guardado.</p>' +
+        caixa.innerHTML = '<p>Entre na sua conta para fechar o pedido. Sua sacola fica guardada.</p>' +
           '<a class="botao botao-vinho botao-largo" href="conta.html?volta=carrinho.html">Entrar ou criar conta</a>';
         return;
       }
@@ -254,6 +310,7 @@
         '<p class="nota-pequena">Frete combinado com a loja.</p><div id="fechamento"></div></aside>';
       desenharLinhas();
       desenharFechamento(r[1].data.session);
+      document.addEventListener('ellize:sacola', function () { if ($('#itens')) desenharLinhas(); });
       $('#itens').addEventListener('click', function (evento) {
         var botao = evento.target.closest('[data-acao]');
         if (!botao) return;
@@ -404,7 +461,7 @@
           caixa.setAttribute('aria-busy', 'false');
           if (r.error) { caixa.innerHTML = '<p class="mensagem mensagem-erro">Não foi possível carregar seus pedidos.</p>'; return; }
           if (!r.data.length) {
-            caixa.innerHTML = estado('Nenhum pedido ainda', 'Seus pedidos aparecem aqui.', '<a class="botao botao-vinho" href="loja.html">Ver a loja</a>');
+            caixa.innerHTML = estado('Nenhum pedido ainda', 'Seus pedidos aparecem aqui.', '<a class="botao botao-vinho" href="loja.html">Ver novidades</a>');
             return;
           }
           caixa.innerHTML = '<ul class="pedidos">' + r.data.map(function (o) {

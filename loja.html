@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Comprar | Ellize Collection</title>
+  <title>Novidades | Ellize Collection</title>
   <meta name="description" content="Compre moda feminina e masculina premium na loja online da Ellize Collection, com envio para todo o Brasil.">
   <meta name="theme-color" content="#2c070a">
   <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
@@ -16,12 +16,27 @@
 <body data-pagina="loja">
   <div id="topo"></div>
   <main id="conteudo" class="pagina container">
+    <div id="trilha"></div>
     <div class="pagina-topo">
-      <span class="etiqueta">Loja online</span>
-      <h1>Comprar</h1>
+      <h1 id="titulo">Novidades</h1>
     </div>
     <nav class="filtros" id="filtros" aria-label="Categorias"></nav>
     <p class="nota-exemplo" id="nota-exemplo" hidden>Os produtos marcados como exemplo são de demonstração, com preços fictícios.</p>
+    <div class="barra-lista">
+      <p id="contagem" role="status"></p>
+      <div class="barra-campos">
+        <label class="seletor">Tamanho
+          <select id="filtro-tamanho"><option value="">Todos</option></select>
+        </label>
+        <label class="seletor">Ordenar por
+          <select id="ordem">
+            <option value="recentes">Mais recentes</option>
+            <option value="menor">Menor preço</option>
+            <option value="maior">Maior preço</option>
+          </select>
+        </label>
+      </div>
+    </div>
     <div class="produtos" id="produtos" aria-busy="true"><div class="esqueleto"></div><div class="esqueleto"></div><div class="esqueleto"></div><div class="esqueleto"></div></div>
   </main>
   <div id="rodape"></div>

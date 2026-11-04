@@ -16,10 +16,11 @@ Depois abra http://localhost:4173.
 
 - `index.html`: página inicial, com SEO e dados estruturados
 - `loja.html`, `produto.html`, `carrinho.html`, `conta.html`: loja online
+- `404.html`: página não encontrada
 - `assets/css/tokens.css`: cores, fontes, espaçamentos e raios
 - `assets/css/site.css`: estilos dos componentes
 - `assets/css/store.css`: estilos da loja
-- `assets/js/main.js`: cabeçalho, rodapé, menu mobile e carrinho
+- `assets/js/main.js`: barra, submenus, busca, sacola e rodapé das páginas da loja
 - `assets/js/store.js`: catálogo, pedidos e login
 - `assets/vendor/`: biblioteca do Supabase (MIT)
 - `assets/img/`: logo em SVG e texturas
