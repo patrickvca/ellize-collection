@@ -37,11 +37,13 @@ Os painéis usam texturas de cetim (`cetim-*.webp`). Para usar fotos da loja, tr
 
 ## Produtos e pedidos
 
-Produtos e pedidos são gerenciados no painel em `/administrator`. Só entram contas cujo e-mail esteja na tabela `admins` e já confirmado. O painel não tem cadastro nem recuperação de senha. O estoque é controlado por cor e tamanho e só baixa quando a loja clica em Finalizar pedido, informando a forma de pagamento. Ao finalizar, a loja também seleciona estado e cidade. Os relatórios contam apenas pedidos finalizados, pela data da finalização. Os produtos atuais são exemplos e devem ser trocados pelos reais.
+Produtos, categorias e pedidos são gerenciados no painel em `/administrator`. A ordem das categorias definida ali vale para a loja e o menu. Só entram contas cujo e-mail esteja na tabela `admins` e já confirmado. O painel não tem cadastro nem recuperação de senha. O estoque é controlado por cor e tamanho e só baixa quando a loja clica em Finalizar pedido, informando a forma de pagamento. Ao finalizar, a loja também seleciona estado e cidade. Os relatórios contam apenas pedidos finalizados, pela data da finalização. Os produtos atuais são exemplos e devem ser trocados pelos reais.
 
 A chave em `store.js` é pública por natureza. A segurança vem das regras de acesso do banco, e o total do pedido é calculado no servidor.
 
 ## Publicação
+
+Ao alterar CSS ou JS, troque o `?v=` nas páginas HTML para o navegador não misturar versões.
 
 O site está no GitHub Pages: https://patrickvca.github.io/ellize-collection/
 

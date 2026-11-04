@@ -55,6 +55,21 @@
     }
     return catalogo;
   }
+  var listaCategorias = null;
+  function categorias() {
+    if (!listaCategorias) {
+      listaCategorias = fetch(CONFIG.url + '/rest/v1/categories?select=slug,name&order=position', {
+        headers: { apikey: CONFIG.chave }
+      }).then(function (resposta) {
+        if (!resposta.ok) throw new Error('categorias');
+        return resposta.json();
+      }).catch(function (erro) {
+        listaCategorias = null;
+        throw erro;
+      });
+    }
+    return listaCategorias;
+  }
   function sugestoes(todos, referencia, limite) {
     var fora = carrinho.ler().map(function (i) { return i.id; }).concat(referencia ? [referencia.id] : []);
     var livres = todos.filter(function (p) { return fora.indexOf(p.id) === -1 && !esgotado(p); });
@@ -96,7 +111,7 @@
   function htmlMenu() {
     return MENU.map(function (item) {
       var colunas = item.colunas.map(function (coluna) {
-        return '<div class="submenu-coluna"><p class="submenu-titulo">' + coluna[0] + '</p>' + coluna[1].map(function (link) {
+        return '<div class="submenu-coluna" data-coluna="' + coluna[0] + '"><p class="submenu-titulo">' + coluna[0] + '</p>' + coluna[1].map(function (link) {
           return '<a href="' + esc(link[1]) + '"' + (link[2] ? ' target="_blank" rel="noopener"' : '') + '>' + link[0] + '</a>';
         }).join('') + '</div>';
       }).join('');
@@ -267,7 +282,7 @@
 
   window.Ellize = {
     config: CONFIG, esc: esc, dinheiro: dinheiro, icone: icone,
-    produtos: produtos, sugestoes: sugestoes, adicionar: adicionar,
+    produtos: produtos, categorias: categorias, sugestoes: sugestoes, adicionar: adicionar,
     preco: preco, estoque: estoque, esgotado: esgotado, precoHTML: precoHTML,
     cores: cores, temCores: temCores, estoqueCor: estoqueCor, estoqueTamanho: estoqueTamanho, corHex: corHex, variacao: variacao, fotoCor: fotoCor
   };
@@ -382,6 +397,42 @@
     if (!evento.target.closest('.cabecalho')) fecharTudo();
   });
   compacto.addEventListener('change', fecharTudo);
+
+  /* Categorias cadastradas no painel, na ordem definida */
+  function linkCategoria(texto, filtro) {
+    return '<a href="loja.html' + (filtro ? '?c=' + encodeURIComponent(filtro).replace(/%2C/g, ',') : '') + '">' + esc(texto) + '</a>';
+  }
+  function trocarLinks(titulo, html) {
+    var coluna = lista.querySelector('[data-coluna="' + titulo + '"]');
+    if (!coluna) return;
+    coluna.querySelectorAll('a').forEach(function (a) { a.remove(); });
+    coluna.insertAdjacentHTML('beforeend', html);
+    coluna.hidden = !html;
+  }
+  Promise.all([categorias(), produtos()]).then(function (dados) {
+    var cats = dados[0];
+    var pecas = dados[1];
+    if (!cats.length) return;
+    var DEPARTAMENTOS = ['feminino', 'masculino'];
+    var outras = cats.filter(function (c) { return DEPARTAMENTOS.indexOf(c.slug) === -1; });
+    trocarLinks('Categorias', linkCategoria('Ver todas') + linkCategoria('Promoções', 'promocao') +
+      cats.map(function (c) { return linkCategoria(c.name, c.slug); }).join(''));
+    DEPARTAMENTOS.forEach(function (slug) {
+      var departamento = cats.filter(function (c) { return c.slug === slug; })[0];
+      var titulo = slug === 'feminino' ? 'Feminino' : 'Masculino';
+      if (!departamento) { trocarLinks(titulo, ''); return; }
+      var comPecas = outras.filter(function (c) {
+        return pecas.some(function (p) { return p.tags.indexOf(slug) !== -1 && p.tags.indexOf(c.slug) !== -1; });
+      });
+      trocarLinks(titulo, linkCategoria('Ver tudo', slug) + comPecas.map(function (c) {
+        return linkCategoria(c.name, slug + ',' + c.slug);
+      }).join(''));
+    });
+    trocarLinks('Mais procurados', outras.map(function (c) { return linkCategoria(c.name, c.slug); }).join(''));
+    var sugestoesBusca = busca.querySelector('.busca-sugestoes');
+    sugestoesBusca.querySelectorAll('a').forEach(function (a) { a.remove(); });
+    sugestoesBusca.insertAdjacentHTML('beforeend', outras.slice(0, 3).map(function (c) { return linkCategoria(c.name, c.slug); }).join(''));
+  }).catch(function () {});
 
   /* Entrada suave */
   var itens = document.querySelectorAll('.revelar');

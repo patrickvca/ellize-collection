@@ -7,8 +7,8 @@
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#2c070a">
   <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="../assets/css/tokens.css">
-  <link rel="stylesheet" href="admin.css">
+  <link rel="stylesheet" href="../assets/css/tokens.css?v=20261104a">
+  <link rel="stylesheet" href="admin.css?v=20261104a">
 </head>
 <body>
   <main class="login" id="tela-login" hidden>
@@ -28,6 +28,7 @@
       <nav class="abas" aria-label="Seções do painel">
         <button type="button" data-aba="produtos" aria-current="page">Produtos</button>
         <button type="button" data-aba="pedidos">Pedidos</button>
+        <button type="button" data-aba="categorias">Categorias</button>
         <button type="button" data-aba="relatorios">Relatórios</button>
       </nav>
       <div class="topo-acoes">
@@ -51,6 +52,15 @@
           <button class="botao botao-vinho" id="novo" type="button">Novo produto</button>
         </div>
         <div id="lista-produtos" aria-busy="true"><p class="estado">Carregando produtos…</p></div>
+      </section>
+
+      <section id="aba-categorias" hidden>
+        <form class="barra" id="form-categoria" novalidate>
+          <input id="nova-categoria" maxlength="40" placeholder="Nome da nova categoria" aria-label="Nome da nova categoria">
+          <button class="botao botao-vinho" type="submit">Adicionar</button>
+        </form>
+        <p class="dica">Use as setas para definir a ordem. Ela vale para o painel, os filtros da loja e o menu.</p>
+        <ul class="categorias" id="lista-categorias"></ul>
       </section>
 
       <section id="aba-relatorios" hidden>
@@ -120,6 +130,10 @@
         <fieldset class="grupo">
           <legend>Categorias</legend>
           <div class="marcas" id="categorias"></div>
+          <div class="nova-categoria">
+            <input id="nova-categoria-produto" maxlength="40" placeholder="Nova categoria" aria-label="Nova categoria">
+            <button class="botao-texto" id="criar-categoria" type="button">+ Adicionar</button>
+          </div>
         </fieldset>
         <fieldset class="grupo">
           <legend>Estoque por cor e tamanho</legend>
@@ -181,6 +195,6 @@
   <div class="aviso" id="aviso" role="status" hidden></div>
 
   <script src="../assets/vendor/supabase-2.119.0.js" defer></script>
-  <script src="admin.js" defer></script>
+  <script src="admin.js?v=20261104a" defer></script>
 </body>
 </html>

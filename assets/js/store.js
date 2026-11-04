@@ -141,7 +141,7 @@
       : [['Início', 'index.html'], ['Novidades']]);
     $('#filtros').innerHTML = FILTROS.map(function (f) {
       var href = f[0] ? 'loja.html?c=' + f[0] : 'loja.html';
-      return '<a class="filtro" href="' + href + '"' + (f[0] === filtroAtual ? ' aria-current="page"' : '') + '>' + f[1] + '</a>';
+      return '<a class="filtro" href="' + href + '"' + (f[0] === filtroAtual ? ' aria-current="page"' : '') + '>' + esc(f[1]) + '</a>';
     }).join('');
 
     function desenhar() {
@@ -573,5 +573,12 @@
   }
 
   var iniciar = { loja: iniciarLoja, produto: iniciarProduto, carrinho: iniciarCarrinho, conta: iniciarConta };
-  iniciar[document.body.dataset.pagina]();
+  function iniciarPagina() { iniciar[document.body.dataset.pagina](); }
+  window.Ellize.categorias().then(function (lista) {
+    if (lista.length) {
+      NOMES = { promocao: 'Promoção' };
+      lista.forEach(function (c) { NOMES[c.slug] = c.name; });
+      FILTROS = [['', 'Todos']].concat(lista.map(function (c) { return [c.slug, c.name]; }), [['promocao', 'Promoção']]);
+    }
+  }).catch(function () {}).then(iniciarPagina);
 })();
