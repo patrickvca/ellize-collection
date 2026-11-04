@@ -1,8 +1,8 @@
 # Ellize Collection
 
-Site institucional da Ellize Collection, loja de moda feminina e masculina premium em Vitória da Conquista, BA.
+Site e loja online da Ellize Collection, moda feminina e masculina premium em Vitória da Conquista, BA.
 
-HTML, CSS e JavaScript puros: sem dependências e sem etapa de build.
+HTML, CSS e JavaScript puros, sem etapa de build. Login, produtos e pedidos ficam no Supabase. O pagamento e o frete são combinados pelo WhatsApp depois do pedido.
 
 ## Rodar localmente
 
@@ -14,15 +14,25 @@ Depois abra http://localhost:4173.
 
 ## Estrutura
 
-- `index.html`: página única, com SEO e dados estruturados
+- `index.html`: página inicial, com SEO e dados estruturados
+- `loja.html`, `produto.html`, `carrinho.html`, `conta.html`: loja online
 - `assets/css/tokens.css`: cores, fontes, espaçamentos e raios
 - `assets/css/site.css`: estilos dos componentes
-- `assets/js/main.js`: menu mobile e animação de entrada
+- `assets/css/store.css`: estilos da loja
+- `assets/js/main.js`: cabeçalho, rodapé, menu mobile e carrinho
+- `assets/js/store.js`: catálogo, pedidos e login
+- `assets/vendor/`: biblioteca do Supabase (MIT)
 - `assets/img/`: logo em SVG e texturas
 
 ## Trocar as texturas por fotos
 
 Os painéis usam texturas de cetim (`cetim-*.webp`). Para usar fotos da loja, troque o `src` da imagem no painel em `index.html` e descreva a foto no `alt`.
+
+## Produtos e pedidos
+
+Produtos ficam na tabela `products` e pedidos em `orders` e `order_items`, no painel do Supabase. Os produtos atuais são exemplos (`is_sample = true`) e devem ser trocados pelos reais.
+
+A chave em `store.js` é pública por natureza. A segurança vem das regras de acesso do banco, e o total do pedido é calculado no servidor.
 
 ## Publicação
 
