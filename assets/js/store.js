@@ -31,7 +31,7 @@
   var estoqueTamanho = window.Ellize.estoqueTamanho;
   var corHex = window.Ellize.corHex;
   var variacao = window.Ellize.variacao;
-  var ESTADOS = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
+  var fotoCor = window.Ellize.fotoCor;
   function $(seletor) { return document.querySelector(seletor); }
   function estado(titulo, texto, acao) {
     return '<div class="estado"><h2>' + esc(titulo) + '</h2>' + (texto ? '<p>' + esc(texto) + '</p>' : '') + (acao || '') + '</div>';
@@ -226,7 +226,7 @@
           '<span style="background:' + corHex(c) + '"></span></label>';
       }).join('') + '</fieldset><p class="campo-erro" id="erro-cor" role="alert" hidden>Selecione uma cor.</p>' : '';
       alvo.innerHTML =
-        '<div class="detalhe-foto"><img src="' + esc(p.image) + '" alt="" width="800" height="1000">' + selo(p) + '</div>' +
+        '<div class="detalhe-foto"><img id="foto-produto" src="' + esc(corAtual ? fotoCor(p, corAtual) : p.image) + '" alt="" width="800" height="1000">' + selo(p) + '</div>' +
         '<form class="detalhe-info" id="form-produto" novalidate>' +
         '<h1>' + esc(p.name) + '</h1>' +
         '<p class="detalhe-preco">' + precoHTML(p) + '</p>' +
@@ -252,6 +252,7 @@
         if (evento.target.name !== 'cor') return;
         var marcado = this.querySelector('input[name="tamanho"]:checked');
         $('#cor-nome').textContent = ': ' + evento.target.value;
+        $('#foto-produto').src = fotoCor(p, evento.target.value);
         $('#erro-cor').hidden = true;
         $('#tamanhos-produto').innerHTML = htmlTamanhos(evento.target.value, marcado && marcado.value);
       });
@@ -292,7 +293,7 @@
       if (!linhas.length) { desenharVazio(); return; }
       $('#itens').innerHTML = linhas.map(function (i, n) {
         var p = produtos[i.id];
-        return '<li class="linha"><img src="' + esc(p.image) + '" alt="" width="96" height="120">' +
+        return '<li class="linha"><img src="' + esc(fotoCor(p, i.color)) + '" alt="" width="96" height="120">' +
           '<div class="linha-info"><a href="produto.html?p=' + encodeURIComponent(p.slug) + '">' + esc(p.name) + '</a>' +
           '<span>' + variacao(i.color, i.size) + '</span><span>' + precoHTML(p) + '</span></div>' +
           '<div class="linha-acoes"><div class="passo">' +
@@ -315,9 +316,6 @@
         '<form id="form-pedido" class="formulario" novalidate>' +
         '<label class="campo">Nome completo<input name="nome" autocomplete="name" required minlength="2" maxlength="120" value="' + esc(meta.full_name || meta.name || '') + '"></label>' +
         '<label class="campo">Telefone com DDD<input name="telefone" type="tel" autocomplete="tel" inputmode="tel" required maxlength="20"></label>' +
-        '<div class="campos-local"><label class="campo">Cidade<input name="cidade" autocomplete="address-level2" required maxlength="80"></label>' +
-        '<label class="campo">Estado<select name="estado" autocomplete="address-level1" required><option value="">UF</option>' +
-        ESTADOS.map(function (uf) { return '<option>' + uf + '</option>'; }).join('') + '</select></label></div>' +
         '<fieldset class="opcoes"><legend>Como quer receber?</legend>' +
         '<label><input type="radio" name="entrega" value="retirada" checked><span>Retirar na loja</span></label>' +
         '<label><input type="radio" name="entrega" value="envio"><span>Receber em casa</span></label></fieldset>' +
@@ -345,8 +343,6 @@
         p_name: form.nome.value,
         p_phone: form.telefone.value,
         p_delivery: form.entrega.value,
-        p_city: form.cidade.value,
-        p_state: form.estado.value,
         p_address: form.endereco.value,
         p_note: form.nota.value
       }).then(function (resposta) {

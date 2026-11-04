@@ -25,6 +25,7 @@ Depois abra http://localhost:4173.
 - `assets/js/store.js`: catálogo, pedidos e login
 - `assets/vendor/`: biblioteca do Supabase (MIT)
 - `assets/img/`: logo em SVG e texturas
+- `assets/data/cidades/`: municípios do Brasil por estado (fonte: IBGE)
 
 ## Trocar as texturas por fotos
 
@@ -32,7 +33,7 @@ Os painéis usam texturas de cetim (`cetim-*.webp`). Para usar fotos da loja, tr
 
 ## Produtos e pedidos
 
-Produtos e pedidos são gerenciados no painel em `/administrator`. Só entram contas cujo e-mail esteja na tabela `admins` e já confirmado. O painel não tem cadastro nem recuperação de senha. O estoque é controlado por cor e tamanho e só baixa quando a loja clica em Finalizar pedido, informando a forma de pagamento. Os relatórios contam apenas pedidos finalizados, pela data da finalização. Os produtos atuais são exemplos e devem ser trocados pelos reais.
+Produtos e pedidos são gerenciados no painel em `/administrator`. Só entram contas cujo e-mail esteja na tabela `admins` e já confirmado. O painel não tem cadastro nem recuperação de senha. O estoque é controlado por cor e tamanho e só baixa quando a loja clica em Finalizar pedido, informando a forma de pagamento. Ao finalizar, a loja também seleciona estado e cidade. Os relatórios contam apenas pedidos finalizados, pela data da finalização. Os produtos atuais são exemplos e devem ser trocados pelos reais.
 
 A chave em `store.js` é pública por natureza. A segurança vem das regras de acesso do banco, e o total do pedido é calculado no servidor.
 

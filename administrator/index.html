@@ -100,7 +100,7 @@
       <div class="editor-corpo">
         <div class="foto-campo">
           <img id="foto-previa" src="../assets/img/cetim-marfim.webp" alt="" width="120" height="150">
-          <label class="campo">Foto (JPG, PNG ou WebP)<input id="foto" type="file" accept="image/jpeg,image/png,image/webp"></label>
+          <label class="campo">Foto principal (JPG, PNG ou WebP)<input id="foto" type="file" accept="image/jpeg,image/png,image/webp"></label>
         </div>
         <label class="campo">Nome<input name="nome" required maxlength="120"></label>
         <label class="campo">Descrição<textarea name="descricao" rows="3" maxlength="2000"></textarea></label>
@@ -114,7 +114,7 @@
         </fieldset>
         <fieldset class="grupo">
           <legend>Estoque por cor e tamanho</legend>
-          <p class="dica">Para peça sem variação de cor, mantenha a linha "Única".</p>
+          <p class="dica">Para peça sem variação de cor, mantenha a linha "Única". A foto de cada cor aparece na loja quando o cliente seleciona a cor.</p>
           <div class="grade-rolagem" id="grade"></div>
           <div class="atalhos" id="atalhos"></div>
         </fieldset>
@@ -148,6 +148,14 @@
             <option value="outro">Outro</option>
           </select>
         </label>
+        <label class="campo">Estado
+          <select id="fin-estado" name="estado"></select>
+        </label>
+        <div class="campo">
+          <label for="fin-cidade">Cidade</label>
+          <input id="fin-cidade" name="cidade" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="fin-cidades" placeholder="Digite ou selecione" maxlength="80">
+          <ul class="cidades" id="fin-cidades" role="listbox" aria-label="Cidades" hidden></ul>
+        </div>
         <p class="mensagem mensagem-erro" id="erro-finalizar" role="alert" hidden></p>
       </div>
       <div class="editor-rodape">

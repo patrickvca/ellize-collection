@@ -27,6 +27,10 @@
   function estoqueCor(p, cor) { return p.sizes.reduce(function (soma, t) { return soma + estoque(p, cor, t); }, 0); }
   function estoqueTamanho(p, tamanho) { return cores(p).reduce(function (soma, c) { return soma + estoque(p, c.name, tamanho); }, 0); }
   function esgotado(p) { return !cores(p).some(function (c) { return estoqueCor(p, c.name) > 0; }); }
+  function fotoCor(p, cor) {
+    var achada = cores(p).filter(function (c) { return c.name === cor; })[0];
+    return (achada && achada.image) || p.image;
+  }
   function corHex(c) { return /^#[0-9a-f]{6}$/i.test(c.hex || '') ? c.hex : '#d6d1c6'; }
   function variacao(cor, tamanho) { return (cor && cor !== 'Única' ? 'Cor ' + esc(cor) + ' · ' : '') + 'Tamanho ' + esc(tamanho); }
   function precoHTML(p) {
@@ -209,7 +213,7 @@
       var total = validos.reduce(function (soma, i) { return soma + i.qty * preco(mapa[i.id]); }, 0);
       sacolaCorpo.innerHTML = '<ul class="linhas">' + validos.map(function (i, n) {
         var p = mapa[i.id];
-        return '<li class="linha"><img src="' + esc(p.image) + '" alt="" width="72" height="90"><div class="linha-info">' + linhaHTML(p, i.color, i.size) + '</div>' +
+        return '<li class="linha"><img src="' + esc(fotoCor(p, i.color)) + '" alt="" width="72" height="90"><div class="linha-info">' + linhaHTML(p, i.color, i.size) + '</div>' +
           '<div class="linha-acoes"><div class="passo">' +
           '<button type="button" data-acao="menos" data-n="' + n + '" aria-label="Diminuir quantidade de ' + esc(p.name) + '"' + (i.qty <= 1 ? ' disabled' : '') + '>−</button>' +
           '<span aria-live="polite">' + i.qty + '</span>' +
@@ -232,7 +236,7 @@
     carrinho.adicionar(p.id, cor, tamanho, 1, estoque(p, cor, tamanho));
     abrirSacola();
     sacolaTitulo.textContent = 'Produto adicionado à sacola';
-    sacolaCorpo.innerHTML = '<div class="linha"><img src="' + esc(p.image) + '" alt="" width="72" height="90"><div class="linha-info">' + linhaHTML(p, cor, tamanho) + '</div></div>' +
+    sacolaCorpo.innerHTML = '<div class="linha"><img src="' + esc(fotoCor(p, cor)) + '" alt="" width="72" height="90"><div class="linha-info">' + linhaHTML(p, cor, tamanho) + '</div></div>' +
       '<div class="sacola-sugestao" id="sacola-sugestao" hidden><h3>Você pode gostar</h3></div>';
     sacolaRodape.innerHTML = '<button class="botao botao-vinho botao-largo" type="button" data-ver-sacola>Ver sacola</button>';
     produtos().then(function (todos) {
@@ -265,7 +269,7 @@
     config: CONFIG, esc: esc, dinheiro: dinheiro, icone: icone,
     produtos: produtos, sugestoes: sugestoes, adicionar: adicionar,
     preco: preco, estoque: estoque, esgotado: esgotado, precoHTML: precoHTML,
-    cores: cores, temCores: temCores, estoqueCor: estoqueCor, estoqueTamanho: estoqueTamanho, corHex: corHex, variacao: variacao
+    cores: cores, temCores: temCores, estoqueCor: estoqueCor, estoqueTamanho: estoqueTamanho, corHex: corHex, variacao: variacao, fotoCor: fotoCor
   };
 
   /* Menu e submenus */

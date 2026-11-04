@@ -288,6 +288,3 @@ a.rapida-botao { display: grid; place-items: center; text-decoration: none; }
 .cores input:disabled + span { position: relative; opacity: 0.4; }
 .cores input:disabled + span::after { content: ""; position: absolute; top: 50%; left: 4px; right: 4px; height: 1.5px; background: var(--tinta); transform: rotate(-45deg); }
 .seletor[hidden] { display: none; }
-.campos-local { display: grid; grid-template-columns: 1fr 96px; gap: 0.75rem; }
-.campo select { width: 100%; min-height: 48px; padding: 0.75rem; border: 1px solid #a89f93; border-radius: var(--raio-s); background: #fff; color: var(--tinta); font: 400 1rem/1.4 var(--sans); }
-.campo select:focus-visible { outline: 2px solid var(--vinho); outline-offset: 1px; }

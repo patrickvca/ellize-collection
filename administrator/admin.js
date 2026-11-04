@@ -183,7 +183,9 @@
     if (!window.confirm('Remover "' + p.name + '" da loja? Os pedidos antigos continuam guardados.')) return;
     sb.from('products').delete().eq('id', p.id).then(function (r) {
       if (r.error) { avisar('Não foi possível remover o produto.'); return; }
-      removerFoto(p.image);
+      (p.colors || []).map(function (c) { return c.image; }).concat(p.image).forEach(function (foto) {
+        if (foto) removerFoto(foto);
+      });
       avisar('Produto removido.');
       carregarProdutos();
     });
@@ -215,7 +217,11 @@
       return '<th><button class="grade-tirar" type="button" data-tirar-tamanho="' + ti + '" aria-label="Remover tamanho ' + esc(t) + '">remover</button>' +
         '<input class="t-nome" maxlength="12" value="' + esc(t) + '" aria-label="Nome do tamanho"></th>';
     }).join('') + '<th></th></tr></thead><tbody>' + grade.cores.map(function (c, ci) {
-      return '<tr><td><div class="grade-cor"><input class="c-hex" type="color" value="' + esc(c.hex) + '" aria-label="Tom da cor">' +
+      var previa = c.previa || (c.image ? fotoSrc(c.image) : '');
+      return '<tr><td><div class="grade-cor"><label class="c-foto" title="Foto desta cor">' +
+        (previa ? '<img src="' + esc(previa) + '" alt="" width="42" height="42">' : '<span>Foto</span>') +
+        '<input type="file" accept="image/jpeg,image/png,image/webp" data-foto-cor="' + ci + '" aria-label="Foto da cor ' + esc(c.name) + '"></label>' +
+        '<input class="c-hex" type="color" value="' + esc(c.hex) + '" aria-label="Tom da cor">' +
         '<input class="c-nome" maxlength="30" value="' + esc(c.name) + '" placeholder="Azul" aria-label="Nome da cor"></div></td>' +
         grade.tamanhos.map(function (t, ti) {
           return '<td><input class="q" type="number" min="0" max="9999" step="1" value="' + esc(grade.q[ci][ti]) + '" data-c="' + ci + '" data-t="' + ti + '" aria-label="Estoque da cor ' + esc(c.name) + ', tamanho ' + esc(t) + '"></td>';
@@ -230,6 +236,15 @@
     grade.q.forEach(function (linha) { linha.push(0); });
     desenharGrade();
   }
+  $('#grade').addEventListener('change', function (evento) {
+    var campo = evento.target.closest('[data-foto-cor]');
+    if (!campo || !campo.files[0]) return;
+    lerGrade();
+    var cor = grade.cores[+campo.dataset.fotoCor];
+    cor.arquivo = campo.files[0];
+    cor.previa = URL.createObjectURL(cor.arquivo);
+    desenharGrade();
+  });
   $('#grade').addEventListener('click', function (evento) {
     var cor = evento.target.closest('[data-tirar-cor]');
     var tamanho = evento.target.closest('[data-tirar-tamanho]');
@@ -274,7 +289,7 @@
       form.exemplo.checked = p.is_sample;
       form.querySelectorAll('[name="categoria"]').forEach(function (c) { c.checked = p.tags.indexOf(c.value) !== -1; });
       grade = {
-        cores: p.colors.map(function (c) { return { name: c.name, hex: c.hex || COR_PADRAO }; }),
+        cores: p.colors.map(function (c) { return { name: c.name, hex: c.hex || COR_PADRAO, image: c.image || null }; }),
         tamanhos: p.sizes.slice(),
         q: p.colors.map(function (c) { return p.sizes.map(function (t) { return qtd(p, c.name, t); }); })
       };
@@ -304,9 +319,9 @@
       });
     });
   }
-  function enviarFoto() {
-    if (!fotoNova) return Promise.resolve(null);
-    return reduzirFoto(fotoNova).then(function (blob) {
+  function enviarFoto(arquivo) {
+    if (!arquivo) return Promise.resolve(null);
+    return reduzirFoto(arquivo).then(function (blob) {
       var nome = crypto.randomUUID() + '.webp';
       return sb.storage.from(BUCKET).upload(nome, blob, { contentType: 'image/webp' }).then(function (r) {
         if (r.error) throw r.error;
@@ -347,7 +362,7 @@
       price_cents: preco,
       promo_price_cents: promo,
       sizes: tamanhos,
-      colors: grade.cores.map(function (c, i) { return { name: nomesCor[i], hex: c.hex }; }),
+      colors: grade.cores.map(function (c, i) { return { name: nomesCor[i], hex: c.hex, image: c.image || null }; }),
       stock: estoque,
       tags: [].map.call(form.querySelectorAll('[name="categoria"]:checked'), function (c) { return c.value; }),
       active: form.ativo.checked,
@@ -367,8 +382,12 @@
     }
     ocupado(botao, true, 'Salvando…');
     var antigo = editando;
-    enviarFoto().then(function (url) {
-      dados.image = url || (antigo ? antigo.image : FOTO_PADRAO);
+    var envios = [enviarFoto(fotoNova)].concat(grade.cores.map(function (c) { return enviarFoto(c.arquivo); }));
+    Promise.all(envios).then(function (urls) {
+      var url = urls[0];
+      dados.colors.forEach(function (c, i) { if (urls[i + 1]) c.image = urls[i + 1]; });
+      var primeiraCor = dados.colors.filter(function (c) { return c.image; })[0];
+      dados.image = url || (antigo ? antigo.image : (primeiraCor ? primeiraCor.image : FOTO_PADRAO));
       if (antigo) return sb.from('products').update(dados).eq('id', antigo.id).select().then(function (r) { return [r, url]; });
       dados.slug = criarSlug(dados.name);
       return sb.from('products').insert(dados).select().then(function (r) { return [r, url]; });
@@ -380,7 +399,12 @@
         erro.hidden = false;
         return;
       }
-      if (resultado[1] && antigo) removerFoto(antigo.image);
+      if (antigo) {
+        var emUso = dados.colors.map(function (c) { return c.image; }).concat(dados.image);
+        (antigo.colors || []).map(function (c) { return c.image; }).concat(antigo.image).forEach(function (foto) {
+          if (foto && emUso.indexOf(foto) === -1) removerFoto(foto);
+        });
+      }
       editor.close();
       avisar('Produto salvo.');
       carregarProdutos();
@@ -463,6 +487,8 @@
     if (finalizar) {
       pedidoFinalizando = finalizar.dataset.finalizar;
       $('#form-finalizar').reset();
+      campoEstado.value = 'BA';
+      carregarCidades();
       $('#erro-finalizar').hidden = true;
       $('#finalizar-titulo').textContent = 'Finalizar pedido #' + finalizar.dataset.numero;
       $('#finalizar').showModal();
@@ -472,6 +498,104 @@
     }
     if (reabrir) mudarStatus(reabrir.dataset.reabrir, 'novo', 'Pedido reaberto.');
   });
+
+  /* Estado e cidade na finalização */
+  var ESTADOS = [['AC', 'Acre'], ['AL', 'Alagoas'], ['AP', 'Amapá'], ['AM', 'Amazonas'], ['BA', 'Bahia'], ['CE', 'Ceará'], ['DF', 'Distrito Federal'], ['ES', 'Espírito Santo'], ['GO', 'Goiás'], ['MA', 'Maranhão'], ['MT', 'Mato Grosso'], ['MS', 'Mato Grosso do Sul'], ['MG', 'Minas Gerais'], ['PA', 'Pará'], ['PB', 'Paraíba'], ['PR', 'Paraná'], ['PE', 'Pernambuco'], ['PI', 'Piauí'], ['RJ', 'Rio de Janeiro'], ['RN', 'Rio Grande do Norte'], ['RS', 'Rio Grande do Sul'], ['RO', 'Rondônia'], ['RR', 'Roraima'], ['SC', 'Santa Catarina'], ['SP', 'São Paulo'], ['SE', 'Sergipe'], ['TO', 'Tocantins']];
+  var cacheCidades = {};
+  var cidadesEstado = [];
+  var cidadesVisiveis = [];
+  var cidadeAtiva = -1;
+  var campoEstado = $('#fin-estado');
+  var campoCidade = $('#fin-cidade');
+  var listaCidades = $('#fin-cidades');
+
+  campoEstado.innerHTML = ESTADOS.map(function (e) { return '<option value="' + e[0] + '">' + e[1] + '</option>'; }).join('');
+  function semAcento(texto) { return texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim(); }
+  function abrirCidades(aberta) {
+    listaCidades.hidden = !aberta;
+    campoCidade.setAttribute('aria-expanded', String(aberta));
+    if (!aberta) { cidadeAtiva = -1; campoCidade.removeAttribute('aria-activedescendant'); }
+  }
+  function desenharCidades() {
+    var termo = semAcento(campoCidade.value);
+    var comeca = [], contem = [];
+    cidadesEstado.forEach(function (c) {
+      var nome = semAcento(c);
+      if (!termo || nome.indexOf(termo) === 0) comeca.push(c);
+      else if (nome.indexOf(termo) !== -1) contem.push(c);
+    });
+    cidadesVisiveis = comeca.concat(contem);
+    cidadeAtiva = -1;
+    listaCidades.innerHTML = cidadesVisiveis.length ? cidadesVisiveis.map(function (c, i) {
+      return '<li id="cidade-' + i + '" role="option" aria-selected="false" data-cidade="' + i + '">' + esc(c) + '</li>';
+    }).join('') : '<li class="sem-cidade">Nenhuma cidade encontrada neste estado.</li>';
+    abrirCidades(true);
+  }
+  function marcarCidade(indice) {
+    var itens = listaCidades.querySelectorAll('[role="option"]');
+    if (!itens.length) return;
+    if (itens[cidadeAtiva]) itens[cidadeAtiva].setAttribute('aria-selected', 'false');
+    cidadeAtiva = (indice + itens.length) % itens.length;
+    itens[cidadeAtiva].setAttribute('aria-selected', 'true');
+    itens[cidadeAtiva].scrollIntoView({ block: 'nearest' });
+    campoCidade.setAttribute('aria-activedescendant', itens[cidadeAtiva].id);
+  }
+  function escolherCidade(indice) {
+    campoCidade.value = cidadesVisiveis[indice];
+    abrirCidades(false);
+  }
+  function carregarCidades() {
+    var uf = campoEstado.value;
+    campoCidade.value = '';
+    abrirCidades(false);
+    cidadesEstado = cacheCidades[uf] || [];
+    if (cacheCidades[uf]) { campoCidade.disabled = false; return Promise.resolve(); }
+    campoCidade.disabled = true;
+    campoCidade.placeholder = 'Carregando cidades…';
+    return fetch('../assets/data/cidades/' + uf + '.json').then(function (r) {
+      if (!r.ok) throw new Error('cidades');
+      return r.json();
+    }).then(function (lista) {
+      cacheCidades[uf] = lista;
+      if (campoEstado.value === uf) cidadesEstado = lista;
+      campoCidade.disabled = false;
+      campoCidade.placeholder = 'Digite ou selecione';
+    }).catch(function () {
+      campoCidade.placeholder = 'Não foi possível carregar';
+    });
+  }
+  campoEstado.addEventListener('change', function () {
+    carregarCidades().then(function () { campoCidade.focus(); });
+  });
+  campoCidade.addEventListener('focus', desenharCidades);
+  campoCidade.addEventListener('click', desenharCidades);
+  campoCidade.addEventListener('input', desenharCidades);
+  campoCidade.addEventListener('blur', function () { abrirCidades(false); });
+  campoCidade.addEventListener('keydown', function (evento) {
+    var aberta = !listaCidades.hidden;
+    if (evento.key === 'ArrowDown' || evento.key === 'ArrowUp') {
+      evento.preventDefault();
+      if (!aberta) desenharCidades();
+      marcarCidade(cidadeAtiva + (evento.key === 'ArrowDown' ? 1 : -1));
+    } else if (evento.key === 'Enter' && aberta) {
+      evento.preventDefault();
+      if (cidadeAtiva >= 0) escolherCidade(cidadeAtiva);
+      else if (cidadesVisiveis.length === 1) escolherCidade(0);
+    } else if (evento.key === 'Escape' && aberta) {
+      evento.preventDefault();
+      evento.stopPropagation();
+      abrirCidades(false);
+    }
+  });
+  listaCidades.addEventListener('mousedown', function (evento) {
+    var item = evento.target.closest('[data-cidade]');
+    evento.preventDefault();
+    if (item) escolherCidade(+item.dataset.cidade);
+  });
+  function cidadeConfirmada() {
+    var termo = semAcento(campoCidade.value);
+    return cidadesEstado.filter(function (c) { return semAcento(c) === termo; })[0] || null;
+  }
 
   /* Finalização com forma de pagamento */
   var pedidoFinalizando = null;
@@ -488,8 +612,16 @@
       erro.hidden = false;
       return;
     }
+    var cidade = cidadeConfirmada();
+    if (!cidade) {
+      erro.textContent = 'Selecione uma cidade da lista.';
+      erro.hidden = false;
+      campoCidade.focus();
+      return;
+    }
+    erro.hidden = true;
     ocupado(botao, true, 'Finalizando…');
-    sb.rpc('admin_finalize_order', { p_order: pedidoFinalizando, p_payment: formulario.pagamento.value }).then(function (r) {
+    sb.rpc('admin_finalize_order', { p_order: pedidoFinalizando, p_payment: formulario.pagamento.value, p_city: cidade, p_state: campoEstado.value }).then(function (r) {
       ocupado(botao, false);
       if (r.error) {
         erro.textContent = r.error.code === 'P0001' ? r.error.message : 'Não foi possível finalizar o pedido.';
@@ -558,7 +690,7 @@
     }).join('') + '</div><div class="relatorio-grade">' +
       tabela('Por forma de pagamento', ['Forma'].concat(cabecalho.slice(1)), linhasValor(dados.by_payment, function (l) { return esc(PAGAMENTOS[l] || l); })) +
       tabela('Por estado', ['Estado'].concat(cabecalho.slice(1)), linhasValor(dados.by_state, esc)) +
-      tabela('Por cidade', ['Cidade'].concat(cabecalho.slice(1)), linhasValor(dados.by_city, function (l) { return esc(l.replace(/ (Da|De|Do|Das|Dos|E) /g, function (m) { return m.toLowerCase(); })); })) +
+      tabela('Por cidade', ['Cidade'].concat(cabecalho.slice(1)), linhasValor(dados.by_city, esc)) +
       tabela('Por período', ['Data'].concat(cabecalho.slice(1)), linhasValor(dados.by_period, rotuloPeriodo)) +
       tabela('Mais vendidos', ['Produto', 'Peças', 'Valor'], dados.top_products.map(function (x) {
         return [esc(x.label) + ' (' + variacaoItem({ color: x.color, size: x.size }) + ')', x.quantity, dinheiro(x.revenue)];
