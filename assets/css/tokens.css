@@ -1,0 +1,45 @@
+/* Tokens de design da Ellize Collection. Todo valor visual do site nasce aqui.
+   Breakpoints (media queries não aceitam variáveis): 640px, 960px. */
+:root {
+  /* Cor: extraída da logo */
+  --vinho: #7a1218;
+  --vinho-forte: #5c0c11;
+  --vinho-profundo: #2c070a;
+  --marfim: #ecebe4;
+  --marfim-claro: #f7f5ef;
+  --creme: #f4f1e8;
+  --tinta: #241a1a;
+  --tinta-suave: #5d5150;
+  --linha: #d6d1c6;
+  --sucesso: #1f6b45;
+  --erro: #a3161e;
+
+  /* Tipografia: fontes do sistema, sem download */
+  --serif: "Palatino Linotype", Palatino, "Book Antiqua", "URW Palladio L", Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --t-etiqueta: 0.75rem;
+  --t-corpo: 1.0625rem;
+  --t-h3: clamp(1.5rem, 1.2rem + 1.2vw, 2.125rem);
+  --t-h2: clamp(2rem, 1.5rem + 2.2vw, 3.25rem);
+  --t-h1: clamp(1.75rem, 1.3rem + 2.1vw, 3rem);
+  --espaco-letras: 0.22em;
+  --leitura: 62ch;
+
+  /* Espaço */
+  --gutter: clamp(1rem, 0.5rem + 2.4vw, 2.5rem);
+  --secao: clamp(4rem, 3rem + 5vw, 7.5rem);
+  --container: 1320px;
+  --header-h: 68px;
+
+  /* Forma */
+  --raio-s: 10px;
+  --raio-m: 20px;
+  --raio-pill: 999px;
+  --sombra-header: 0 8px 28px rgb(44 7 10 / 0.16);
+  --sombra-fab: 0 10px 26px rgb(44 7 10 / 0.34);
+
+  /* Movimento */
+  --suave: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --rapido: 180ms;
+  --lento: 700ms;
+}
