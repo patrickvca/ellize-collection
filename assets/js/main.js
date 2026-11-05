@@ -21,6 +21,8 @@
   }
 
   function preco(p) { return p.promo_price_cents || p.price_cents; }
+  function precoPix(p) { return Math.min(p.promo_pix_price_cents || p.pix_price_cents || preco(p), preco(p)); }
+  function emPromocao(p) { return !!(p.promo_price_cents || p.promo_pix_price_cents); }
   function cores(p) { return p.colors && p.colors.length ? p.colors : [{ name: 'Única' }]; }
   function temCores(p) { var c = cores(p); return c.length > 1 || c[0].name !== 'Única'; }
   function estoque(p, cor, tamanho) { return Number(((p.stock || {})[cor] || {})[tamanho]) || 0; }
@@ -34,16 +36,19 @@
   function corHex(c) { return /^#[0-9a-f]{6}$/i.test(c.hex || '') ? c.hex : '#d6d1c6'; }
   function variacao(cor, tamanho) { return (cor && cor !== 'Única' ? 'Cor ' + esc(cor) + ' · ' : '') + 'Tamanho ' + esc(tamanho); }
   function precoHTML(p) {
-    return p.promo_price_cents
+    var cartao = p.promo_price_cents
       ? '<s class="preco-antigo">' + dinheiro(p.price_cents) + '</s> <span class="preco-promo">' + dinheiro(p.promo_price_cents) + '</span>'
       : dinheiro(p.price_cents);
+    if (precoPix(p) >= preco(p)) return cartao;
+    return '<span class="preco-linha">' + cartao + ' <small>no cartão</small></span>' +
+      '<span class="preco-linha preco-pix">' + dinheiro(precoPix(p)) + ' <small>no Pix</small></span>';
   }
 
   /* Catálogo público, carregado uma vez por página */
   var catalogo = null;
   function produtos() {
     if (!catalogo) {
-      catalogo = fetch(CONFIG.url + '/rest/v1/products?select=id,slug,name,price_cents,promo_price_cents,stock,colors,image,sizes,tags,is_sample&order=created_at.desc&limit=200', {
+      catalogo = fetch(CONFIG.url + '/rest/v1/products?select=id,slug,name,price_cents,promo_price_cents,pix_price_cents,promo_pix_price_cents,stock,colors,image,sizes,tags,is_sample&order=created_at.desc&limit=200', {
         headers: { apikey: CONFIG.chave }
       }).then(function (resposta) {
         if (!resposta.ok) throw new Error('catalogo');
@@ -226,6 +231,7 @@
         return;
       }
       var total = validos.reduce(function (soma, i) { return soma + i.qty * preco(mapa[i.id]); }, 0);
+      var totalPix = validos.reduce(function (soma, i) { return soma + i.qty * precoPix(mapa[i.id]); }, 0);
       sacolaCorpo.innerHTML = '<ul class="linhas">' + validos.map(function (i, n) {
         var p = mapa[i.id];
         return '<li class="linha"><img src="' + esc(fotoCor(p, i.color)) + '" alt="" width="72" height="90"><div class="linha-info">' + linhaHTML(p, i.color, i.size) + '</div>' +
@@ -235,9 +241,12 @@
           '<button type="button" data-acao="mais" data-n="' + n + '" aria-label="Aumentar quantidade de ' + esc(p.name) + '"' + (i.qty >= Math.min(10, estoque(p, i.color, i.size)) ? ' disabled' : '') + '>+</button></div>' +
           '<button class="botao-icone" type="button" data-acao="remover" data-n="' + n + '" aria-label="Remover ' + esc(p.name) + '">' + icone('i-lixo', true) + '</button></div></li>';
       }).join('') + '</ul>';
-      sacolaRodape.innerHTML = '<p class="sacola-valor"><span>Subtotal</span><strong>' + dinheiro(total) + '</strong></p>' +
+      sacolaRodape.innerHTML = (totalPix < total ? '' : '<p class="sacola-valor"><span>Subtotal</span><strong>' + dinheiro(total) + '</strong></p>') +
         '<p class="sacola-valor"><span>Frete</span><strong>Combinado com a loja</strong></p>' +
-        '<p class="sacola-valor sacola-total"><span>Valor total</span><strong>' + dinheiro(total) + '</strong></p>' +
+        (totalPix < total
+          ? '<p class="sacola-valor sacola-total"><span>Total no cartão</span><strong>' + dinheiro(total) + '</strong></p>' +
+            '<p class="sacola-valor sacola-total"><span>Total no Pix</span><strong>' + dinheiro(totalPix) + '</strong></p>'
+          : '<p class="sacola-valor sacola-total"><span>Valor total</span><strong>' + dinheiro(total) + '</strong></p>') +
         '<a class="botao botao-vinho botao-largo" href="carrinho.html">Finalizar compra</a>';
     }).catch(function () {
       sacolaCorpo.innerHTML = '<div class="estado"><h2>Não foi possível carregar</h2><p>Verifique sua conexão e tente novamente.</p></div>';
@@ -283,7 +292,7 @@
   window.Ellize = {
     config: CONFIG, esc: esc, dinheiro: dinheiro, icone: icone,
     produtos: produtos, categorias: categorias, sugestoes: sugestoes, adicionar: adicionar,
-    preco: preco, estoque: estoque, esgotado: esgotado, precoHTML: precoHTML,
+    preco: preco, precoPix: precoPix, emPromocao: emPromocao, estoque: estoque, esgotado: esgotado, precoHTML: precoHTML,
     cores: cores, temCores: temCores, estoqueCor: estoqueCor, estoqueTamanho: estoqueTamanho, corHex: corHex, variacao: variacao, fotoCor: fotoCor
   };
 

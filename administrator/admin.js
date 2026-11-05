@@ -29,6 +29,12 @@
     });
   }
   function fotoSrc(caminho) { return /^https?:/.test(caminho) ? caminho : '../' + caminho; }
+  function emPromocao(p) { return !!(p.promo_price_cents || p.promo_pix_price_cents); }
+  function valorPedido(o, pix) {
+    return o.order_items.reduce(function (soma, i) {
+      return soma + i.quantity * (pix ? i.pix_price_cents : i.card_price_cents);
+    }, 0);
+  }
   function qtd(p, cor, tamanho) { return Number((p.stock[cor] || {})[tamanho]) || 0; }
   function total(p) {
     return p.colors.reduce(function (soma, c) {
@@ -128,7 +134,7 @@
     desenharCategorias();
     var termo = $('#busca').value.trim().toLowerCase();
     var filtro = $('#filtro').value;
-    var promo = produtos.filter(function (p) { return p.promo_price_cents; }).length;
+    var promo = produtos.filter(emPromocao).length;
     var esgotados = produtos.filter(function (p) { return total(p) === 0; }).length;
     var ativos = produtos.filter(function (p) { return p.active; }).length;
     $('#resumo').innerHTML = [['Produtos', produtos.length], ['Visíveis', ativos], ['Em promoção', promo], ['Esgotados', esgotados]].map(function (i) {
@@ -138,7 +144,7 @@
       if (termo && p.name.toLowerCase().indexOf(termo) === -1) return false;
       if (filtro === 'ativos') return p.active;
       if (filtro === 'ocultos') return !p.active;
-      if (filtro === 'promocao') return !!p.promo_price_cents;
+      if (filtro === 'promocao') return emPromocao(p);
       if (filtro === 'esgotados') return total(p) === 0;
       return true;
     });
@@ -151,6 +157,9 @@
       var preco = p.promo_price_cents
         ? '<s>' + dinheiro(p.price_cents) + '</s> <strong>' + dinheiro(p.promo_price_cents) + '</strong>'
         : '<strong>' + dinheiro(p.price_cents) + '</strong>';
+      var cartaoFinal = p.promo_price_cents || p.price_cents;
+      var pixFinal = Math.min(p.promo_pix_price_cents || p.pix_price_cents || cartaoFinal, cartaoFinal);
+      if (pixFinal < cartaoFinal) preco += ' no cartão<br><strong>' + dinheiro(pixFinal) + '</strong> no Pix';
       var estoque = p.colors.map(function (c) {
         return '<div class="estoque-cor">' + (c.name !== 'Única' ? '<span class="cor-rotulo"><i style="background:' + (/^#[0-9a-f]{6}$/i.test(c.hex || '') ? c.hex : '#d6d1c6') + '"></i>' + esc(c.name) + '</span>' : '') +
           p.sizes.map(function (t) {
@@ -162,7 +171,7 @@
         '<div class="item-info"><h3>' + esc(p.name) + '</h3><p class="item-preco">' + preco + '</p></div>' +
         '<div class="item-estoque">' + estoque + '</div>' +
         '<div class="item-selos">' + (p.active ? '<span class="selo selo-ok">Visível</span>' : '<span class="selo">Oculto</span>') +
-        (p.promo_price_cents ? '<span class="selo selo-promo">Promoção</span>' : '') +
+        (emPromocao(p) ? '<span class="selo selo-promo">Promoção</span>' : '') +
         (total(p) === 0 ? '<span class="selo selo-zero">Esgotado</span>' : '') + '</div>' +
         '<div class="item-acoes"><button class="botao-texto" type="button" data-editar="' + esc(p.id) + '">Editar</button>' +
         '<button class="botao-texto botao-perigo" type="button" data-remover="' + esc(p.id) + '">Remover</button></div></li>';
@@ -457,6 +466,8 @@
       form.descricao.value = p.description;
       form.preco.value = paraTexto(p.price_cents);
       form.promo.value = p.promo_price_cents ? paraTexto(p.promo_price_cents) : '';
+      form.pix.value = p.pix_price_cents ? paraTexto(p.pix_price_cents) : '';
+      form.promoPix.value = p.promo_pix_price_cents ? paraTexto(p.promo_pix_price_cents) : '';
       form.ativo.checked = p.active;
       form.exemplo.checked = p.is_sample;
       grade = {
@@ -548,7 +559,15 @@
     if (nome.length < 2) throw new Error('Informe o nome do produto.');
     if (!preco) throw new Error('Informe um preço válido, por exemplo 259,90.');
     if (textoPromo && !promo) throw new Error('Informe um preço promocional válido.');
-    if (promo && promo >= preco) throw new Error('O preço promocional precisa ser menor que o preço normal.');
+    if (promo && promo >= preco) throw new Error('A promoção no cartão precisa ser menor que o valor no cartão.');
+    var textoPix = form.pix.value.trim();
+    var textoPromoPix = form.promoPix.value.trim();
+    var pix = textoPix ? paraCentavos(textoPix) : null;
+    var promoPix = textoPromoPix ? paraCentavos(textoPromoPix) : null;
+    if (textoPix && !pix) throw new Error('Informe um valor no Pix válido.');
+    if (textoPromoPix && !promoPix) throw new Error('Informe uma promoção no Pix válida.');
+    if (pix && pix > preco) throw new Error('O valor no Pix não pode ser maior que o valor no cartão.');
+    if (promoPix && promoPix >= (pix || preco)) throw new Error('A promoção no Pix precisa ser menor que o valor no Pix.');
     lerGrade();
     var nomesCor = grade.cores.map(function (c) { return c.name.trim(); });
     var tamanhos = grade.tamanhos.map(function (x) { return x.trim(); });
@@ -572,6 +591,8 @@
       description: form.descricao.value.trim(),
       price_cents: preco,
       promo_price_cents: promo,
+      pix_price_cents: pix,
+      promo_pix_price_cents: promoPix,
       sizes: tamanhos,
       colors: grade.cores.map(function (c, i) { return { name: nomesCor[i], hex: c.hex, image: c.image || null }; }),
       stock: estoque,
@@ -661,6 +682,8 @@
       return '<li class="pedido"><div class="pedido-topo"><h3>Pedido #' + esc(o.number) + '</h3><div class="pedido-controle">' + controle + '</div></div>' +
         '<p>' + new Date(o.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) + ' · <strong>' + dinheiro(o.total_cents) + '</strong></p>' +
         '<p>' + esc(o.customer_name) + ' · <a href="' + esc(whatsapp) + '" target="_blank" rel="noopener">' + esc(o.phone) + '</a>' + (o.city ? ' · ' + esc(o.city) + ' - ' + esc(o.state) : '') + '</p>' +
+        (!o.stock_deducted && o.status !== 'cancelado'
+          ? '<p>Cliente escolheu: ' + (o.payment_choice === 'pix' ? 'Pix' : 'Cartão') + ' · Cartão ' + dinheiro(valorPedido(o, false)) + ' · Pix ' + dinheiro(valorPedido(o, true)) + '</p>' : '') +
         (o.payment_method ? '<p>Pagamento: ' + esc(PAGAMENTOS[o.payment_method] || o.payment_method) + '</p>' : '') +
         '<p>' + (o.delivery === 'envio' ? 'Receber em casa: ' + esc(o.address || '') : 'Retirar na loja') + '</p>' +
         (o.note ? '<p>Observação: ' + esc(o.note) + '</p>' : '') +
@@ -702,6 +725,9 @@
       carregarCidades();
       $('#erro-finalizar').hidden = true;
       $('#finalizar-titulo').textContent = 'Finalizar pedido #' + finalizar.dataset.numero;
+      var pedidoAtual = pedidos.filter(function (o) { return o.id === pedidoFinalizando; })[0];
+      $('#form-finalizar').pagamento.value = pedidoAtual.payment_choice === 'pix' ? 'pix' : '';
+      mostrarValorFinal();
       $('#finalizar').showModal();
     }
     if (cancelar && window.confirm('Cancelar o pedido #' + cancelar.dataset.numero + '?')) {
@@ -810,6 +836,14 @@
 
   /* Finalização com forma de pagamento */
   var pedidoFinalizando = null;
+  function mostrarValorFinal() {
+    var pedido = pedidos.filter(function (o) { return o.id === pedidoFinalizando; })[0];
+    var pagamento = $('#form-finalizar').pagamento.value;
+    $('#finalizar-valor').textContent = pagamento
+      ? 'Valor a receber: ' + dinheiro(valorPedido(pedido, pagamento === 'pix'))
+      : 'Cartão ' + dinheiro(valorPedido(pedido, false)) + ' · Pix ' + dinheiro(valorPedido(pedido, true));
+  }
+  $('#form-finalizar').pagamento.addEventListener('change', mostrarValorFinal);
   $('#finalizar').addEventListener('click', function (evento) {
     if (evento.target === this || evento.target.closest('[data-fechar]')) this.close();
   });

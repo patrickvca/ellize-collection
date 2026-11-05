@@ -268,6 +268,10 @@
 .selo-esgotado { background: var(--tinta); color: var(--creme); }
 .preco-antigo { color: var(--tinta-suave); font-size: 0.875em; }
 .preco-promo { color: var(--vinho); font-weight: 500; }
+.preco-linha { display: block; }
+.preco-linha small { color: var(--tinta-suave); font-family: var(--sans); font-size: 0.75em; font-weight: 400; }
+.preco-pix { color: var(--vinho); font-weight: 500; }
+.resumo-total[hidden] { display: none; }
 .tamanhos input:disabled { cursor: not-allowed; }
 .tamanhos input:disabled + span { border-color: var(--linha); background: transparent; color: #8f8580; text-decoration: line-through; cursor: not-allowed; }
 .tamanhos label:hover input:disabled + span { border-color: var(--linha); }

@@ -22,6 +22,8 @@
   var esc = window.Ellize.esc;
   var icone = window.Ellize.icone;
   var preco = window.Ellize.preco;
+  var precoPix = window.Ellize.precoPix;
+  var emPromocao = window.Ellize.emPromocao;
   var estoque = window.Ellize.estoque;
   var esgotado = window.Ellize.esgotado;
   var precoHTML = window.Ellize.precoHTML;
@@ -42,7 +44,7 @@
   }
   function selo(produto) {
     return '<span class="selos">' + (produto.is_sample ? '<span class="selo-exemplo">Exemplo</span>' : '') +
-      (produto.promo_price_cents ? '<span class="selo-exemplo selo-promo">Promoção</span>' : '') +
+      (emPromocao(produto) ? '<span class="selo-exemplo selo-promo">Promoção</span>' : '') +
       (esgotado(produto) ? '<span class="selo-exemplo selo-esgotado">Esgotado</span>' : '') + '</span>';
   }
   function traduzirErro(erro) {
@@ -165,7 +167,7 @@
     var consulta = sb.from('products').select('*').order('created_at', { ascending: false });
     var categorias = pedidas.filter(function (t) { return t !== 'promocao'; });
     if (categorias.length) consulta = consulta.contains('tags', categorias);
-    if (pedidas.indexOf('promocao') !== -1) consulta = consulta.not('promo_price_cents', 'is', null);
+    if (pedidas.indexOf('promocao') !== -1) consulta = consulta.or('promo_price_cents.not.is.null,promo_pix_price_cents.not.is.null');
     if (busca) consulta = consulta.ilike('name', '%' + busca.replace(/[%_\\]/g, '\\$&') + '%');
     consulta.then(function (resposta) {
       grade.setAttribute('aria-busy', 'false');
@@ -282,8 +284,22 @@
         return i;
       });
     }
-    function total() {
-      return linhasValidas().reduce(function (soma, i) { return soma + i.qty * preco(produtos[i.id]); }, 0);
+    function total(pix) {
+      return linhasValidas().reduce(function (soma, i) {
+        return soma + i.qty * (pix ? precoPix(produtos[i.id]) : preco(produtos[i.id]));
+      }, 0);
+    }
+    function atualizarTotais() {
+      var cartao = total(false);
+      var pix = total(true);
+      $('#total').textContent = dinheiro(cartao);
+      $('#total-pix').textContent = dinheiro(pix);
+      $('#linha-pix').hidden = pix >= cartao;
+      $('#rotulo-total').textContent = pix < cartao ? 'Total no cartão' : 'Total das peças';
+      if ($('#opcao-pix')) {
+        $('#opcao-pix').textContent = 'Pix · ' + dinheiro(pix);
+        $('#opcao-cartao').textContent = 'Cartão · ' + dinheiro(cartao);
+      }
     }
     function desenharVazio() {
       alvo.innerHTML = estado('Sua sacola está vazia', 'Escolha suas peças nas novidades.', '<a class="botao botao-vinho" href="loja.html">Ver novidades</a>');
@@ -302,7 +318,7 @@
           '<button type="button" data-acao="mais" data-n="' + n + '" aria-label="Aumentar quantidade de ' + esc(p.name) + '"' + (i.qty >= Math.min(10, estoque(p, i.color, i.size)) ? ' disabled' : '') + '>+</button></div>' +
           '<button class="botao-icone" type="button" data-acao="remover" data-n="' + n + '" aria-label="Remover ' + esc(p.name) + '">' + icone('i-lixo', true) + '</button></div></li>';
       }).join('');
-      $('#total').textContent = dinheiro(total());
+      atualizarTotais();
     }
     function desenharFechamento(sessao) {
       var caixa = $('#fechamento');
@@ -316,6 +332,9 @@
         '<form id="form-pedido" class="formulario" novalidate>' +
         '<label class="campo">Nome completo<input name="nome" autocomplete="name" required minlength="2" maxlength="120" value="' + esc(meta.full_name || meta.name || '') + '"></label>' +
         '<label class="campo">Telefone com DDD<input name="telefone" type="tel" autocomplete="tel" inputmode="tel" required maxlength="20"></label>' +
+        '<fieldset class="opcoes"><legend>Como quer pagar?</legend>' +
+        '<label><input type="radio" name="pagamento" value="pix" checked><span id="opcao-pix"></span></label>' +
+        '<label><input type="radio" name="pagamento" value="cartao"><span id="opcao-cartao"></span></label></fieldset>' +
         '<fieldset class="opcoes"><legend>Como quer receber?</legend>' +
         '<label><input type="radio" name="entrega" value="retirada" checked><span>Retirar na loja</span></label>' +
         '<label><input type="radio" name="entrega" value="envio"><span>Receber em casa</span></label></fieldset>' +
@@ -329,6 +348,7 @@
         $('#campo-endereco').hidden = form.entrega.value !== 'envio';
       });
       form.addEventListener('submit', enviarPedido);
+      atualizarTotais();
     }
     function enviarPedido(evento) {
       evento.preventDefault();
@@ -343,6 +363,7 @@
         p_name: form.nome.value,
         p_phone: form.telefone.value,
         p_delivery: form.entrega.value,
+        p_payment: form.pagamento.value,
         p_address: form.endereco.value,
         p_note: form.nota.value
       }).then(function (resposta) {
@@ -355,7 +376,7 @@
         var pedido = resposta.data;
         var texto = 'Olá! Fiz o pedido #' + pedido.number + ' no site da Ellize Collection.\n\n' +
           linhas.map(function (i) { return i.qty + 'x ' + produtos[i.id].name + ' (' + (i.color !== 'Única' ? i.color + ', ' : '') + i.size + ')'; }).join('\n') +
-          '\n\nTotal: ' + dinheiro(pedido.total_cents) + '\nEntrega: ' + (form.entrega.value === 'envio' ? 'Receber em casa' : 'Retirar na loja');
+          '\n\nTotal: ' + dinheiro(pedido.total_cents) + '\nPagamento: ' + (form.pagamento.value === 'pix' ? 'Pix' : 'Cartão') + '\nEntrega: ' + (form.entrega.value === 'envio' ? 'Receber em casa' : 'Retirar na loja');
         var linkPedido = WHATSAPP + '?text=' + encodeURIComponent(texto);
         carrinho.salvar([]);
         alvo.innerHTML = '<div class="estado estado-sucesso"><span class="etiqueta">Pedido #' + esc(pedido.number) + '</span>' +
@@ -380,7 +401,8 @@
       if (JSON.stringify(validas) !== JSON.stringify(carrinho.ler())) carrinho.salvar(validas);
       if (!validas.length) { desenharVazio(); return; }
       alvo.innerHTML = '<ul class="linhas" id="itens"></ul><aside class="resumo">' +
-        '<p class="resumo-total"><span>Total das peças</span><strong id="total"></strong></p>' +
+        '<p class="resumo-total"><span id="rotulo-total">Total das peças</span><strong id="total"></strong></p>' +
+        '<p class="resumo-total" id="linha-pix" hidden><span>Total no Pix</span><strong id="total-pix"></strong></p>' +
         '<p class="nota-pequena">Frete combinado com a loja.</p><div id="fechamento"></div></aside>';
       desenharLinhas();
       desenharFechamento(r[1].data.session);
@@ -528,7 +550,7 @@
       $('#sair').addEventListener('click', function () {
         sb.auth.signOut().then(function () { desenharAcesso('entrar'); });
       });
-      sb.from('orders').select('number,total_cents,status,delivery,created_at,order_items(product_name,color,size,quantity)')
+      sb.from('orders').select('number,total_cents,status,delivery,payment_choice,created_at,order_items(product_name,color,size,quantity)')
         .order('created_at', { ascending: false }).then(function (r) {
           var caixa = $('#pedidos');
           if (!caixa) return;
@@ -541,7 +563,7 @@
           caixa.innerHTML = '<ul class="pedidos">' + r.data.map(function (o) {
             return '<li class="pedido"><div class="pedido-topo"><strong>Pedido #' + esc(o.number) + '</strong>' +
               '<span class="pedido-status">' + esc(STATUS[o.status] || o.status) + '</span></div>' +
-              '<p>' + new Date(o.created_at).toLocaleDateString('pt-BR') + ' · ' + dinheiro(o.total_cents) + ' · ' + (o.delivery === 'envio' ? 'Receber em casa' : 'Retirar na loja') + '</p>' +
+              '<p>' + new Date(o.created_at).toLocaleDateString('pt-BR') + ' · ' + dinheiro(o.total_cents) + ' · ' + (o.payment_choice === 'pix' ? 'Pix' : 'Cartão') + ' · ' + (o.delivery === 'envio' ? 'Receber em casa' : 'Retirar na loja') + '</p>' +
               '<ul>' + o.order_items.map(function (i) {
                 return '<li>' + i.quantity + 'x ' + esc(i.product_name) + ' (' + (i.color !== 'Única' ? esc(i.color) + ', ' : '') + esc(i.size) + ')</li>';
               }).join('') + '</ul></li>';

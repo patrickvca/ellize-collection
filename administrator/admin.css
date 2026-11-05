@@ -151,6 +151,7 @@ ul { margin: 0; padding: 0; list-style: none; }
 .categoria input { width: 100%; min-height: 42px; padding: 0.375rem 0.75rem; border: 1px solid var(--linha); border-radius: var(--raio-s); background: #fff; color: var(--tinta); font: 400 1rem/1.2 var(--sans); }
 .categoria input:hover { border-color: #a89f93; }
 .categoria-total { color: var(--tinta-suave); font-size: 0.8125rem; white-space: nowrap; }
+.valor-final { font-family: var(--serif); font-size: 1.125rem; color: var(--vinho); }
 .grade-tirar { display: block; width: 100%; padding: 0 0 0.125rem; border: 0; background: none; color: var(--erro); font-size: 0.75rem; cursor: pointer; }
 
 .finalizar { width: min(460px, calc(100% - 24px)); }

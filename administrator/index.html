@@ -7,8 +7,8 @@
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#2c070a">
   <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="../assets/css/tokens.css?v=20261104a">
-  <link rel="stylesheet" href="admin.css?v=20261104a">
+  <link rel="stylesheet" href="../assets/css/tokens.css?v=20261105a">
+  <link rel="stylesheet" href="admin.css?v=20261105a">
 </head>
 <body>
   <main class="login" id="tela-login" hidden>
@@ -124,8 +124,10 @@
         <label class="campo">Nome<input name="nome" required maxlength="120"></label>
         <label class="campo">Descrição<textarea name="descricao" rows="3" maxlength="2000"></textarea></label>
         <div class="duas">
-          <label class="campo">Preço (R$)<input name="preco" inputmode="decimal" required placeholder="259,90"></label>
-          <label class="campo">Preço promocional (R$)<input name="promo" inputmode="decimal" placeholder="Sem promoção"></label>
+          <label class="campo">Valor no cartão (R$)<input name="preco" inputmode="decimal" required placeholder="259,90"></label>
+          <label class="campo">Valor no Pix (R$)<input name="pix" inputmode="decimal" placeholder="Igual ao cartão"></label>
+          <label class="campo">Promoção no cartão (R$)<input name="promo" inputmode="decimal" placeholder="Sem promoção"></label>
+          <label class="campo">Promoção no Pix (R$)<input name="promoPix" inputmode="decimal" placeholder="Sem promoção"></label>
         </div>
         <fieldset class="grupo">
           <legend>Categorias</legend>
@@ -183,6 +185,8 @@
           <input id="fin-cidade" name="cidade" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="fin-cidades" placeholder="Digite ou selecione" maxlength="80">
           <ul class="cidades" id="fin-cidades" role="listbox" aria-label="Cidades" hidden></ul>
         </div>
+        <p class="valor-final" id="finalizar-valor" aria-live="polite"></p>
+        <p class="dica">Pix usa o valor no Pix. As demais formas usam o valor no cartão.</p>
         <p class="mensagem mensagem-erro" id="erro-finalizar" role="alert" hidden></p>
       </div>
       <div class="editor-rodape">
@@ -195,6 +199,6 @@
   <div class="aviso" id="aviso" role="status" hidden></div>
 
   <script src="../assets/vendor/supabase-2.119.0.js" defer></script>
-  <script src="admin.js?v=20261104a" defer></script>
+  <script src="admin.js?v=20261105a" defer></script>
 </body>
 </html>
