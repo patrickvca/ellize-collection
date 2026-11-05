@@ -727,6 +727,9 @@
       $('#finalizar-titulo').textContent = 'Finalizar pedido #' + finalizar.dataset.numero;
       var pedidoAtual = pedidos.filter(function (o) { return o.id === pedidoFinalizando; })[0];
       $('#form-finalizar').pagamento.value = pedidoAtual.payment_choice === 'pix' ? 'pix' : '';
+      var opcaoDinheiro = $('#form-finalizar').pagamento.querySelector('[value="dinheiro"]');
+      opcaoDinheiro.disabled = pedidoAtual.delivery !== 'retirada';
+      opcaoDinheiro.hidden = opcaoDinheiro.disabled;
       mostrarValorFinal();
       $('#finalizar').showModal();
     }
@@ -840,7 +843,7 @@
     var pedido = pedidos.filter(function (o) { return o.id === pedidoFinalizando; })[0];
     var pagamento = $('#form-finalizar').pagamento.value;
     $('#finalizar-valor').textContent = pagamento
-      ? 'Valor a receber: ' + dinheiro(valorPedido(pedido, pagamento === 'pix'))
+      ? 'Valor a receber: ' + dinheiro(valorPedido(pedido, ['pix', 'dinheiro', 'transferencia'].indexOf(pagamento) !== -1))
       : 'Cartão ' + dinheiro(valorPedido(pedido, false)) + ' · Pix ' + dinheiro(valorPedido(pedido, true));
   }
   $('#form-finalizar').pagamento.addEventListener('change', mostrarValorFinal);
