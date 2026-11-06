@@ -254,7 +254,8 @@
         '<a class="botao botao-linha botao-largo" target="_blank" rel="noopener" href="' + WHATSAPP + '?text=' +
         encodeURIComponent('Olá! Tenho uma dúvida sobre: ' + p.name) + '">' + icone('i-whatsapp') + 'Tirar dúvida no WhatsApp</a>' +
         '<div class="sanfona"><details open><summary>Sobre a peça</summary><p>' + esc(p.description) + '</p></details>' +
-        '<details><summary>Entrega</summary><p>Enviamos para todo o Brasil pelos Correios, com valor e prazo calculados pelo CEP na sacola. Em Vitória da Conquista, você retira na loja sem custo ou recebe em casa por R$ 10,00.</p></details></div>' +
+        '<details><summary>Entrega</summary><p>Enviamos para todo o Brasil pelos Correios, com valor e prazo calculados pelo CEP na sacola. Em Vitória da Conquista, você retira na loja sem custo ou recebe em casa por R$ 10,00.</p></details>' +
+        '<details><summary>Trocas e devoluções</summary><p>Você tem até 7 dias depois do recebimento para pedir troca ou devolução. <a href="politicas.html">Ver a política completa</a>.</p></details></div>' +
         '</form>';
       $('#form-produto').addEventListener('submit', function (evento) {
         evento.preventDefault();
@@ -301,7 +302,10 @@
     }
     var frete = null;
     var consultaFrete = 0;
+    var saldoCredito = 0;
     function valorFrete() { return frete && frete.escolhida ? frete.escolhida.price_cents : 0; }
+    function usandoCredito() { var campo = $('#usar-credito'); return !!(campo && campo.checked); }
+    function menosCredito(valor) { return usandoCredito() ? Math.max(0, valor - saldoCredito) : valor; }
     function pecas() { return linhasValidas().reduce(function (soma, i) { return soma + i.qty; }, 0); }
     function total(pix) {
       return linhasValidas().reduce(function (soma, i) {
@@ -310,8 +314,14 @@
     }
     function atualizarTotais() {
       var escolhida = frete && frete.escolhida;
-      var cartao = total(false) + valorFrete();
-      var pix = total(true) + valorFrete();
+      var cartaoCheio = total(false) + valorFrete();
+      var pixCheio = total(true) + valorFrete();
+      var cartao = menosCredito(cartaoCheio);
+      var pix = menosCredito(pixCheio);
+      var formPedido = $('#form-pedido');
+      var cheio = formPedido && formPedido.pagamento.value === 'pix' ? pixCheio : cartaoCheio;
+      $('#linha-credito').hidden = !usandoCredito();
+      $('#valor-credito').textContent = '− ' + dinheiro(Math.min(saldoCredito, cheio));
       $('#linha-frete').hidden = !escolhida;
       $('#valor-frete').textContent = valorFrete() ? dinheiro(valorFrete()) : 'Grátis';
       if ($('#campo-endereco')) $('#campo-endereco').hidden = !escolhida || escolhida.kind === 'retirada';
@@ -447,11 +457,23 @@
         '<label class="campo">Bairro<input name="bairro" maxlength="60"></label>' +
         '<div class="endereco-linha endereco-cidade"><label class="campo">Cidade<input name="cidade" readonly tabindex="-1"></label>' +
         '<label class="campo">Estado<input name="estado" readonly tabindex="-1"></label></div></fieldset>' +
+        '<label class="credito-opcao" id="opcao-credito" hidden><input type="checkbox" id="usar-credito" checked> <span id="texto-credito"></span></label>' +
         '<label class="campo">Observação (opcional)<textarea name="nota" rows="2" maxlength="500"></textarea></label>' +
         '<p class="mensagem mensagem-erro" id="erro-pedido" role="alert" hidden></p>' +
         '<button class="botao botao-vinho botao-largo" type="submit">Fechar pedido</button>' +
         '<p class="nota-pequena">Ao fechar, você recebe as instruções para pagar.</p></form>';
       $('#form-pedido').addEventListener('submit', enviarPedido);
+      $('#form-pedido').addEventListener('change', function (evento) {
+        if (evento.target.name === 'pagamento' || evento.target.id === 'usar-credito') atualizarTotais();
+      });
+      sb.from('store_credits').select('amount_cents').then(function (r) {
+        if (r.error) return;
+        saldoCredito = r.data.reduce(function (soma, c) { return soma + c.amount_cents; }, 0);
+        if (saldoCredito <= 0) { saldoCredito = 0; return; }
+        $('#texto-credito').textContent = 'Usar meu crédito de ' + dinheiro(saldoCredito);
+        $('#opcao-credito').hidden = false;
+        atualizarTotais();
+      });
       atualizarTotais();
     }
     function enviarPedido(evento) {
@@ -482,6 +504,7 @@
         p_phone: form.telefone.value,
         p_payment: form.pagamento.value,
         p_quote: entrega.id,
+        p_use_credit: usandoCredito(),
         p_address: entrega.kind === 'retirada' ? null : textoEndereco(form),
         p_note: form.nota.value
       }).then(function (resposta) {
@@ -494,16 +517,24 @@
         var pedido = resposta.data;
         var texto = 'Olá! Fiz o pedido #' + pedido.number + ' no site da Ellize Collection.\n\n' +
           linhas.map(function (i) { return i.qty + 'x ' + produtos[i.id].name + ' (' + (i.color !== 'Única' ? i.color + ', ' : '') + i.size + ')'; }).join('\n') +
-          '\n\nTotal: ' + dinheiro(pedido.total_cents) + '\nPagamento: ' + (form.pagamento.value === 'pix' ? 'Pix' : 'Cartão') + '\nEntrega: ' + entrega.service +
+          (pedido.credit_cents ? '\n\nCrédito usado: ' + dinheiro(pedido.credit_cents) : '') + '\n\nTotal: ' + dinheiro(pedido.total_cents) + '\nPagamento: ' + (form.pagamento.value === 'pix' ? 'Pix' : 'Cartão') + '\nEntrega: ' + entrega.service +
           (entrega.kind === 'retirada' ? '' : '\nFrete: ' + dinheiro(entrega.price_cents) + (entrega.days ? ' (' + prazoFrete(entrega) + ')' : '') + '\nEndereço: ' + textoEndereco(form) + ', CEP ' + formatarCep(frete.cep));
         var linkPedido = WHATSAPP + '?text=' + encodeURIComponent(texto);
+        if (pedido.total_cents === 0) {
+          carrinho.salvar([]);
+          alvo.innerHTML = '<div class="estado estado-sucesso"><span class="etiqueta">Pedido #' + esc(pedido.number) + '</span>' +
+            '<h2>Pedido recebido</h2><p>Seu crédito cobriu o valor total. A loja vai confirmar o pedido.</p>' +
+            '<a class="botao botao-vinho" href="conta.html">Ver minhas compras</a></div>';
+          window.scrollTo(0, 0);
+          return;
+        }
         ocupado(botao, true, 'Abrindo o pagamento…');
         pagamento({ order_id: pedido.id }).then(function (cobranca) {
           carrinho.salvar([]);
           if (cobranca.url) { location.href = cobranca.url; return; }
           if (cobranca.disponivel) {
             alvo.innerHTML = '<div class="estado estado-sucesso"><span class="etiqueta">Pedido #' + esc(pedido.number) + '</span>' +
-              '<h2>Pedido recebido</h2><p>Não foi possível abrir o pagamento agora. Você pode tentar de novo em Meus pedidos.</p>' +
+              '<h2>Pedido recebido</h2><p>Não foi possível abrir o pagamento agora. Você pode tentar de novo em Minhas compras.</p>' +
               '<a class="botao botao-vinho" href="conta.html">Ver meus pedidos</a></div>';
             window.scrollTo(0, 0);
             return;
@@ -536,6 +567,7 @@
         '<button class="botao botao-linha" type="submit">Calcular</button></span></label></form>' +
         '<div id="frete-resultado" aria-live="polite"></div>' +
         '<p class="resumo-total" id="linha-frete" hidden><span>Frete</span><strong id="valor-frete"></strong></p>' +
+        '<p class="resumo-total" id="linha-credito" hidden><span>Crédito da loja</span><strong id="valor-credito"></strong></p>' +
         '<p class="resumo-total"><span id="rotulo-total">Total das peças</span><strong id="total"></strong></p>' +
         '<p class="resumo-total" id="linha-pix" hidden><span>Total no Pix</span><strong id="total-pix"></strong></p>' +
         '<div id="fechamento"></div></aside>';
@@ -575,7 +607,7 @@
         '<p class="nota-pequena" id="google-nota" hidden>O login com Google ainda está sendo ativado. Use e-mail e senha.</p>' +
         '<p class="divisor"><span>ou</span></p>' +
         '<form class="formulario" id="form-acesso" novalidate>' +
-        (cadastro ? '<label class="campo">Nome<input name="nome" autocomplete="name" required minlength="2" maxlength="120"></label>' : '') +
+        (cadastro ? '<label class="campo">Nome completo<input name="nome" autocomplete="name" required minlength="2" maxlength="120"></label>' : '') +
         campoEmail() +
         '<label class="campo">Senha<input name="senha" type="password" autocomplete="' + (cadastro ? 'new-password' : 'current-password') + '" required minlength="8"></label>' +
         '<p class="mensagem" id="msg-acesso" role="alert" hidden></p>' +
@@ -589,6 +621,7 @@
         evento.preventDefault();
         var form = evento.target;
         var botao = form.querySelector('button[type="submit"]');
+        if (cadastro) form.nome.value = form.nome.value.trim();
         if (!form.reportValidity()) return;
         ocupado(botao, true, 'Aguarde…');
         var pedido = cadastro
@@ -682,20 +715,32 @@
       alvo.innerHTML = '<div class="painel-conta"><div class="conta-topo"><div><span class="etiqueta">Minha conta</span>' +
         '<h1>Olá' + (meta.full_name ? ', ' + esc(meta.full_name.split(' ')[0]) : '') + '</h1><p>' + esc(sessao.user.email) + '</p></div>' +
         '<button class="botao botao-linha" id="sair" type="button">Sair</button></div>' +
-        '<h2>Meus pedidos</h2><div id="pedidos" aria-busy="true"><p>Carregando pedidos…</p></div></div>';
+        '<h2>Minhas compras</h2><div id="saldo-credito"></div><div id="pedidos" aria-busy="true"><p>Carregando compras…</p></div></div>';
       $('#sair').addEventListener('click', function () {
         sb.auth.signOut().then(function () { desenharAcesso('entrar'); });
       });
-      sb.from('orders').select('id,number,total_cents,status,delivery,shipping_service,payment_choice,payment_issue,stock_deducted,created_at,order_items(product_name,color,size,quantity)')
+      sb.from('store_credits').select('amount_cents,reason,created_at').order('created_at', { ascending: false }).then(function (r) {
+        var caixa = $('#saldo-credito');
+        if (r.error || !r.data.length || !caixa) return;
+        var saldo = r.data.reduce(function (soma, c) { return soma + c.amount_cents; }, 0);
+        caixa.innerHTML = '<div class="saldo-credito"><p>' + (saldo > 0
+          ? 'Você tem <strong>' + dinheiro(saldo) + '</strong> de crédito na loja. Use ao fechar o próximo pedido.'
+          : 'Seu crédito na loja está em <strong>' + dinheiro(0) + '</strong>.') + '</p>' +
+          '<details><summary>Ver histórico do crédito</summary><ul class="credito-historico">' + r.data.map(function (c) {
+            return '<li><span>' + dataCurta(c.created_at) + ' · ' + esc(c.reason) + '</span><strong>' + (c.amount_cents < 0 ? '− ' : '+ ') + dinheiro(Math.abs(c.amount_cents)) + '</strong></li>';
+          }).join('') + '</ul></details></div>';
+      });
+      sb.from('orders').select('id,number,total_cents,credit_cents,status,delivery,shipping_service,payment_choice,payment_issue,stock_deducted,tracking_code,delivered_at,created_at,order_items(product_id,product_name,color,size,quantity),order_requests(kind,status,admin_note,credit_cents,created_at)')
         .order('created_at', { ascending: false }).then(function (r) {
           var caixa = $('#pedidos');
           if (!caixa) return;
           caixa.setAttribute('aria-busy', 'false');
-          if (r.error) { caixa.innerHTML = '<p class="mensagem mensagem-erro">Não foi possível carregar seus pedidos.</p>'; return; }
+          if (r.error) { caixa.innerHTML = '<p class="mensagem mensagem-erro">Não foi possível carregar suas compras.</p>'; return; }
           if (!r.data.length) {
-            caixa.innerHTML = estado('Nenhum pedido ainda', 'Seus pedidos aparecem aqui.', '<a class="botao botao-vinho" href="loja.html">Ver novidades</a>');
+            caixa.innerHTML = estado('Nenhuma compra ainda', 'Suas compras aparecem aqui.', '<a class="botao botao-vinho" href="loja.html">Ver novidades</a>');
             return;
           }
+          var comprasPorId = {};
           var AVISOS = {
             aprovado: 'Pagamento aprovado. Seu pedido aparece como pago em instantes.',
             pendente: 'Pagamento em análise. Avisaremos quando for confirmado.',
@@ -703,20 +748,35 @@
           };
           var aviso = AVISOS[parametros.get('pagamento')];
           caixa.innerHTML = (aviso ? '<p class="mensagem">' + aviso + '</p>' : '') + '<ul class="pedidos">' + r.data.map(function (o) {
+            comprasPorId[o.id] = o;
             return '<li class="pedido"><div class="pedido-topo"><strong>Pedido #' + esc(o.number) + '</strong>' +
               '<span class="pedido-status">' + esc(STATUS[o.status] || o.status) + '</span></div>' +
               '<p>' + new Date(o.created_at).toLocaleDateString('pt-BR') + ' · ' + dinheiro(o.total_cents) + ' · ' + (o.payment_choice === 'pix' ? 'Pix' : 'Cartão') + ' · ' + (o.delivery === 'retirada' ? 'Retirar na loja' : esc(o.shipping_service || 'Receber em casa')) + '</p>' +
               '<ul>' + o.order_items.map(function (i) {
                 return '<li>' + i.quantity + 'x ' + esc(i.product_name) + ' (' + (i.color !== 'Única' ? esc(i.color) + ', ' : '') + esc(i.size) + ')</li>';
               }).join('') + '</ul>' +
-              (o.status === 'novo' && !o.stock_deducted && !o.payment_issue ? '<button class="botao botao-vinho" type="button" data-pagar="' + esc(o.id) + '" hidden>Pagar agora</button>' : '') + '</li>';
+              rastreioHTML(o) + solicitacaoHTML(o) + '<div class="pedido-botoes">' +
+              (o.status === 'novo' && !o.stock_deducted && !o.payment_issue && o.total_cents > 0 ? '<button class="botao botao-vinho" type="button" data-pagar="' + esc(o.id) + '" hidden>Pagar agora</button>' : '') +
+              (o.status === 'entregue' || o.status === 'cancelado' ? '<button class="botao botao-vinho" type="button" data-recomprar="' + esc(o.id) + '">Comprar novamente</button>' : '') +
+              (podeSolicitar(o) ? '<button class="botao botao-linha" type="button" data-solicitar="' + esc(o.id) + '">Pedir troca ou devolução</button>' : '') +
+              '</div></li>';
           }).join('') + '</ul>';
           var botoes = caixa.querySelectorAll('[data-pagar]');
-          if (!botoes.length) return;
-          pagamento({ check: true }).then(function (estadoPagamento) {
-            if (estadoPagamento.disponivel) botoes.forEach(function (b) { b.hidden = false; });
+          if (botoes.length) {
+            pagamento({ check: true }).then(function (estadoPagamento) {
+              if (estadoPagamento.disponivel) botoes.forEach(function (b) { b.hidden = false; });
+            });
+          }
+          caixa.addEventListener('submit', function (evento) {
+            if (!evento.target.matches('[data-form-solicitar]')) return;
+            evento.preventDefault();
+            enviarSolicitacao(evento.target);
           });
           caixa.addEventListener('click', function (evento) {
+            var recomprar = evento.target.closest('[data-recomprar]');
+            if (recomprar) { comprarNovamente(comprasPorId[recomprar.dataset.recomprar], recomprar); return; }
+            var solicitar = evento.target.closest('[data-solicitar]');
+            if (solicitar) { abrirSolicitacao(comprasPorId[solicitar.dataset.solicitar], solicitar); return; }
             var botao = evento.target.closest('[data-pagar]');
             if (!botao) return;
             ocupado(botao, true, 'Abrindo o pagamento…');
@@ -729,6 +789,95 @@
         });
     }
 
+    function dataCurta(valor) { return new Date(valor).toLocaleDateString('pt-BR'); }
+    function fimDoPrazo(o) { return new Date(new Date(o.delivered_at).getTime() + 7 * 24 * 60 * 60 * 1000); }
+    function jaSolicitou(o) {
+      return (o.order_requests || []).some(function (s) { return s.status !== 'recusado'; });
+    }
+    function podeSolicitar(o) {
+      return o.status === 'entregue' && o.delivered_at && new Date() <= fimDoPrazo(o) && !jaSolicitou(o);
+    }
+    function rastreioHTML(o) {
+      if (o.status === 'entregue') return o.delivered_at ? '<p class="pedido-entregue">Entregue em ' + dataCurta(o.delivered_at) + '</p>' : '';
+      if (o.status === 'cancelado') return '';
+      var retirada = o.delivery === 'retirada';
+      var etapas = ['Pedido recebido', 'Pagamento confirmado', retirada ? 'Pronto para retirar' : 'A caminho', retirada ? 'Retirado' : 'Entregue'];
+      var atual = { novo: 0, confirmado: 0, pago: 1, enviado: 2 }[o.status] || 0;
+      return '<ol class="rastreio" aria-label="Andamento do pedido">' + etapas.map(function (etapa, n) {
+        return '<li class="' + (n < atual ? 'feita' : n === atual ? 'atual' : '') + '"' + (n === atual ? ' aria-current="step"' : '') + '>' + etapa + '</li>';
+      }).join('') + '</ol>' +
+        (o.tracking_code ? '<p class="rastreio-codigo">Código de rastreio: <strong>' + esc(o.tracking_code) + '</strong> ' +
+          '<a href="https://rastreamento.correios.com.br/app/index.php" target="_blank" rel="noopener">Rastrear nos Correios</a></p>' : '');
+    }
+    function solicitacaoHTML(o) {
+      var NOMES = { aberto: 'Em análise', aprovado: 'Aprovada', recusado: 'Recusada', concluido: 'Concluída' };
+      var lista = (o.order_requests || []).slice().sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1; });
+      if (!lista.length) {
+        return podeSolicitar(o) ? '<p class="nota-pequena">Troca ou devolução até ' + dataCurta(fimDoPrazo(o)) + '. <a href="politicas.html">Ver a política</a>.</p>' : '';
+      }
+      var s = lista[0];
+      return '<p class="pedido-solicitacao">' + (s.kind === 'troca' ? 'Troca' : 'Devolução') + ': ' + (NOMES[s.status] || esc(s.status)) +
+        (s.credit_cents ? ' · crédito de ' + dinheiro(s.credit_cents) : '') + (s.admin_note ? '. ' + esc(s.admin_note) : '') + '</p>';
+    }
+    function comprarNovamente(o, botao) {
+      var itens = o.order_items.filter(function (i) { return i.product_id; });
+      ocupado(botao, true, 'Adicionando…');
+      sb.from('products').select('*').in('id', itens.map(function (i) { return i.product_id; })).then(function (r) {
+        var mapa = {};
+        (r.data || []).forEach(function (p) { mapa[p.id] = p; });
+        var adicionados = 0;
+        itens.forEach(function (i) {
+          var p = mapa[i.product_id];
+          var disponivel = p ? estoque(p, i.color, i.size) : 0;
+          if (disponivel < 1) return;
+          carrinho.adicionar(p.id, i.color, i.size, Math.min(i.quantity, disponivel), disponivel);
+          adicionados++;
+        });
+        if (adicionados) { location.href = 'carrinho.html'; return; }
+        ocupado(botao, false);
+        window.alert('Essas peças não estão mais disponíveis.');
+      });
+    }
+    function abrirSolicitacao(o, botao) {
+      var li = botao.closest('.pedido');
+      if (li.querySelector('[data-form-solicitar]')) return;
+      li.insertAdjacentHTML('beforeend', '<form class="formulario solicitacao" data-form-solicitar="' + esc(o.id) + '" novalidate>' +
+        '<fieldset class="opcoes"><legend>O que você quer fazer?</legend>' +
+        '<label><input type="radio" name="tipo" value="troca" checked><span>Trocar</span></label>' +
+        '<label><input type="radio" name="tipo" value="devolucao"><span>Devolver e receber o reembolso</span></label></fieldset>' +
+        '<fieldset class="solicitacao-pecas"><legend>Quais peças?</legend>' + o.order_items.map(function (i) {
+          var nome = i.quantity + 'x ' + i.product_name + ' (' + (i.color !== 'Única' ? i.color + ', ' : '') + i.size + ')';
+          return '<label><input type="checkbox" name="peca" value="' + esc(nome) + '"> ' + esc(nome) + '</label>';
+        }).join('') + '</fieldset>' +
+        '<label class="campo">Conte o motivo<textarea name="motivo" rows="3" maxlength="1000"></textarea></label>' +
+        '<p class="mensagem mensagem-erro" role="alert" hidden></p>' +
+        '<button class="botao botao-vinho" type="submit">Enviar solicitação</button>' +
+        '<p class="nota-pequena">Na troca, o valor da peça vira crédito depois que ela chega à loja. <a href="politicas.html">Ver a política</a>.</p></form>');
+      li.querySelector('[data-form-solicitar] input').focus();
+    }
+    function enviarSolicitacao(form) {
+      var erro = form.querySelector('.mensagem-erro');
+      var botao = form.querySelector('button[type="submit"]');
+      var pecas = [].map.call(form.querySelectorAll('[name="peca"]:checked'), function (c) { return c.value; });
+      erro.hidden = true;
+      if (!pecas.length || !form.motivo.value.trim()) {
+        erro.textContent = 'Escolha as peças e conte o motivo.';
+        erro.hidden = false;
+        return;
+      }
+      ocupado(botao, true, 'Enviando…');
+      sb.rpc('create_return_request', {
+        p_order: form.dataset.formSolicitar, p_kind: form.tipo.value, p_items: pecas.join('; '), p_reason: form.motivo.value
+      }).then(function (r) {
+        if (r.error) {
+          ocupado(botao, false);
+          erro.textContent = traduzirErro(r.error);
+          erro.hidden = false;
+          return;
+        }
+        location.href = 'conta.html';
+      });
+    }
     alvo.addEventListener('click', function (evento) {
       var botao = evento.target.closest('[data-modo]');
       if (!botao) return;

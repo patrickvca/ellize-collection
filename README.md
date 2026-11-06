@@ -59,6 +59,14 @@ Com `MERCADO_PAGO_ACCESS_TOKEN` e `MERCADO_PAGO_WEBHOOK_SECRET` configurados nas
 
 Problemas como peça sem estoque, valor diferente ou pagamento devolvido aparecem em vermelho no pedido do painel. Cancelar no painel não devolve o dinheiro: a devolução é feita no Mercado Pago. No Mercado Pago, o aviso aponta para `https://ukvivmgyxnuijmglidwm.supabase.co/functions/v1/pagamento-aviso`, com o evento Pagamentos. As duas funções são publicadas com a verificação de JWT desligada, porque autenticam por conta própria. Use `SITE_URL` ao trocar de domínio.
 
+## Minhas compras, trocas e crédito
+
+Em `conta.html`, o cliente acompanha o andamento desde a compra. O código de rastreio é salvo no pedido pelo painel e move o pedido pago para enviado. Quando o pedido vira entregue, o rastreio some e aparecem Comprar novamente e, por 7 dias, Pedir troca ou devolução. O prazo conta da data em que a loja marca Entregue, e o servidor confere esse limite.
+
+A aba Trocas do painel responde às solicitações. A troca vira crédito na conta do cliente (`store_credits`). No fechamento ele usa o crédito e paga só a diferença, e o que sobrar continua na conta. Cancelar um pedido devolve o crédito usado. A política fica em `politicas.html`.
+
+A aba Clientes do painel lista as contas com `admin_list_customers`, restrita a administradores. Contas sem nome usam o nome do último pedido. O valor comprado soma só pedidos finalizados. Em Ver detalhes, a loja vê contato, últimas compras e movimentos de crédito, e ajusta o saldo para mais ou para menos com `admin_adjust_credit`. O motivo aparece para o cliente, e o saldo não fica negativo.
+
 ## Publicação
 
 Ao alterar CSS ou JS, troque o `?v=` nas páginas HTML para o navegador não misturar versões.

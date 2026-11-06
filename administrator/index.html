@@ -7,8 +7,8 @@
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#2c070a">
   <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="../assets/css/tokens.css?v=20261106g">
-  <link rel="stylesheet" href="admin.css?v=20261106g">
+  <link rel="stylesheet" href="../assets/css/tokens.css?v=20261106h">
+  <link rel="stylesheet" href="admin.css?v=20261106h">
 </head>
 <body>
   <main class="login" id="tela-login" hidden>
@@ -28,6 +28,8 @@
       <nav class="abas" aria-label="Seções do painel">
         <button type="button" data-aba="produtos" aria-current="page">Produtos</button>
         <button type="button" data-aba="pedidos">Pedidos</button>
+        <button type="button" data-aba="trocas">Trocas</button>
+        <button type="button" data-aba="clientes">Clientes</button>
         <button type="button" data-aba="categorias">Categorias</button>
         <button type="button" data-aba="relatorios">Relatórios</button>
       </nav>
@@ -52,6 +54,19 @@
           <button class="botao botao-vinho" id="novo" type="button">Novo produto</button>
         </div>
         <div id="lista-produtos" aria-busy="true"><p class="estado">Carregando produtos…</p></div>
+      </section>
+
+      <section id="aba-trocas" hidden>
+        <p class="dica">Pedidos de troca e devolução feitos em até 7 dias depois da entrega. Ao concluir uma troca, informe o crédito. Reembolsos são feitos no Mercado Pago.</p>
+        <div id="lista-trocas"><p class="estado">Carregando…</p></div>
+      </section>
+
+      <section id="aba-clientes" hidden>
+        <div class="barra">
+          <input id="busca-clientes" type="search" placeholder="Buscar por nome, e-mail ou telefone" aria-label="Buscar clientes">
+        </div>
+        <p class="dica" id="total-clientes"></p>
+        <div id="lista-clientes"><p class="estado">Carregando…</p></div>
       </section>
 
       <section id="aba-categorias" hidden>
@@ -198,6 +213,6 @@
   <div class="aviso" id="aviso" role="status" hidden></div>
 
   <script src="../assets/vendor/supabase-2.119.0.js" defer></script>
-  <script src="admin.js?v=20261106g" defer></script>
+  <script src="admin.js?v=20261106h" defer></script>
 </body>
 </html>

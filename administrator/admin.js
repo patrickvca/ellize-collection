@@ -117,10 +117,12 @@
     botao.addEventListener('click', function () {
       document.querySelectorAll('[data-aba]').forEach(function (b) { b.removeAttribute('aria-current'); });
       botao.setAttribute('aria-current', 'page');
-      ['produtos', 'pedidos', 'categorias', 'relatorios'].forEach(function (aba) {
+      ['produtos', 'pedidos', 'trocas', 'clientes', 'categorias', 'relatorios'].forEach(function (aba) {
         $('#aba-' + aba).hidden = botao.dataset.aba !== aba;
       });
       if (botao.dataset.aba === 'relatorios') carregarRelatorio();
+      if (botao.dataset.aba === 'trocas') carregarTrocas();
+      if (botao.dataset.aba === 'clientes') carregarClientes();
     });
   });
 
@@ -692,7 +694,12 @@
         '<p>' + (o.delivery === 'retirada' ? 'Retirar na loja'
           : esc(o.shipping_service || 'Receber em casa') + (o.shipping_cents ? ' · frete ' + dinheiro(o.shipping_cents) : '') +
             (o.shipping_days ? ' · até ' + esc(o.shipping_days) + ' dias' : '') + ': ' + esc(o.address || '') + (o.cep ? ' · CEP ' + esc(o.cep) : '')) + '</p>' +
+        (o.credit_cents ? '<p>Crédito usado: ' + dinheiro(o.credit_cents) + '</p>' : '') +
         (o.note ? '<p>Observação: ' + esc(o.note) + '</p>' : '') +
+        (o.stock_deducted && (o.delivery === 'correios' || o.delivery === 'envio') && o.status !== 'cancelado' && o.status !== 'entregue'
+          ? '<form class="rastreio-form" data-rastreio="' + esc(o.id) + '"><input name="codigo" value="' + esc(o.tracking_code || '') + '" maxlength="40" placeholder="Código de rastreio" aria-label="Código de rastreio do pedido ' + esc(o.number) + '">' +
+            '<button class="botao-texto" type="submit">Salvar rastreio</button></form>'
+          : (o.tracking_code ? '<p>Rastreio: ' + esc(o.tracking_code) + '</p>' : '')) +
         '<ul class="pedido-itens">' + o.order_items.map(function (i) {
           return '<li>' + i.quantity + 'x ' + esc(i.product_name) + ' (' + variacaoItem(i) + ') · ' + dinheiro(i.unit_price_cents) + '</li>';
         }).join('') + '</ul>' + acoes + '</li>';
@@ -719,6 +726,145 @@
     }
     campo.disabled = true;
     mudarStatus(campo.dataset.status, campo.value, 'Status atualizado.');
+  });
+  $('#lista-pedidos').addEventListener('submit', function (evento) {
+    var form = evento.target.closest('[data-rastreio]');
+    if (!form) return;
+    evento.preventDefault();
+    concluirPedido(sb.rpc('admin_set_tracking', { p_order: form.dataset.rastreio, p_code: form.codigo.value }), 'Rastreio salvo.');
+  });
+  var clientes = [];
+  var clienteAberto = null;
+  var NOME_STATUS = { novo: 'Aguardando pagamento', confirmado: 'Confirmado', pago: 'Pago', enviado: 'Enviado', entregue: 'Entregue', cancelado: 'Cancelado' };
+  function carregarClientes() {
+    return sb.rpc('admin_list_customers').then(function (r) {
+      if (r.error) { $('#lista-clientes').innerHTML = '<p class="estado">Não foi possível carregar os clientes.</p>'; return; }
+      clientes = r.data;
+      desenharClientes();
+    });
+  }
+  function desenharClientes() {
+    var busca = $('#busca-clientes').value.trim().toLowerCase();
+    var lista = clientes.filter(function (c) {
+      return !busca || [c.customer_name, c.customer_email, c.customer_phone].some(function (v) { return (v || '').toLowerCase().indexOf(busca) !== -1; });
+    });
+    $('#total-clientes').textContent = lista.length + (lista.length === 1 ? ' cliente' : ' clientes') + (busca ? (lista.length === 1 ? ' encontrado' : ' encontrados') : (lista.length === 1 ? ' cadastrado' : ' cadastrados'));
+    if (!lista.length) { $('#lista-clientes').innerHTML = '<p class="estado">Nenhum cliente por aqui.</p>'; return; }
+    $('#lista-clientes').innerHTML = '<ul class="pedidos">' + lista.map(function (c) {
+      var numeros = (c.customer_phone || '').replace(/\D/g, '');
+      var whatsapp = 'https://wa.me/' + (numeros.indexOf('55') === 0 && numeros.length > 11 ? numeros : '55' + numeros);
+      return '<li class="pedido"><div class="pedido-topo"><h3>' + esc(c.customer_name || 'Sem nome') + '</h3>' +
+        '<strong>' + c.order_count + (c.order_count === 1 ? ' pedido' : ' pedidos') + '</strong></div>' +
+        '<p><a href="mailto:' + esc(c.customer_email) + '">' + esc(c.customer_email) + '</a>' +
+        (numeros ? ' · <a href="' + esc(whatsapp) + '" target="_blank" rel="noopener">' + esc(c.customer_phone) + '</a>' : '') + '</p>' +
+        '<p>Cadastro em ' + new Date(c.signed_up_at).toLocaleDateString('pt-BR') +
+        (c.last_order_at ? ' · Último pedido em ' + new Date(c.last_order_at).toLocaleDateString('pt-BR') : '') + '</p>' +
+        '<p>Comprou ' + dinheiro(Number(c.spent_cents)) + ' · Crédito de ' + dinheiro(Number(c.credit_cents)) + '</p>' +
+        '<div class="pedido-acoes"><button class="botao-texto" type="button" data-cliente="' + esc(c.customer_id) + '"' + (clienteAberto === c.customer_id ? ' aria-expanded="true"' : ' aria-expanded="false"') + '>' +
+        (clienteAberto === c.customer_id ? 'Fechar detalhes' : 'Ver detalhes') + '</button></div>' +
+        (clienteAberto === c.customer_id ? '<div class="cliente-detalhe" id="cliente-detalhe"><p class="estado">Carregando…</p></div>' : '') + '</li>';
+    }).join('') + '</ul>';
+    if (clienteAberto) carregarDetalheCliente();
+  }
+  function clientePorId(id) { return clientes.filter(function (c) { return c.customer_id === id; })[0]; }
+  function carregarDetalheCliente() {
+    var id = clienteAberto;
+    Promise.all([
+      sb.from('orders').select('number,total_cents,status,delivery,shipping_service,created_at,order_items(product_name,color,size,quantity)')
+        .eq('user_id', id).order('created_at', { ascending: false }).limit(10),
+      sb.from('store_credits').select('amount_cents,reason,created_at').eq('user_id', id).order('created_at', { ascending: false }).limit(50)
+    ]).then(function (r) {
+      var caixa = $('#cliente-detalhe');
+      if (!caixa || clienteAberto !== id) return;
+      if (r[0].error || r[1].error) { caixa.innerHTML = '<p class="estado">Não foi possível carregar os detalhes.</p>'; return; }
+      var c = clientePorId(id);
+      var numeros = (c.customer_phone || '').replace(/\D/g, '');
+      var whatsapp = 'https://wa.me/' + (numeros.indexOf('55') === 0 && numeros.length > 11 ? numeros : '55' + numeros);
+      caixa.innerHTML = '<h4>Contato</h4><p>E-mail: <a href="mailto:' + esc(c.customer_email) + '">' + esc(c.customer_email) + '</a></p>' +
+        '<p>Celular: ' + (numeros ? '<a href="' + esc(whatsapp) + '" target="_blank" rel="noopener">' + esc(c.customer_phone) + '</a>' : 'Ainda não informado. Ele vem do primeiro pedido.') + '</p>' +
+        '<h4>Crédito na loja</h4><p class="cliente-saldo">Saldo: <strong>' + dinheiro(Number(c.credit_cents)) + '</strong></p>' +
+        '<form class="credito-form" data-credito="' + esc(id) + '" novalidate>' +
+        '<label class="campo">Ajuste<select name="tipo"><option value="1">Adicionar crédito</option><option value="-1">Remover crédito</option></select></label>' +
+        '<label class="campo">Valor (R$)<input name="valor" inputmode="decimal" placeholder="0,00"></label>' +
+        '<label class="campo credito-motivo">Motivo (aparece para o cliente)<input name="motivo" maxlength="200"></label>' +
+        '<button class="botao botao-vinho" type="submit">Salvar ajuste</button></form>' +
+        (r[1].data.length ? '<ul class="cliente-lista">' + r[1].data.map(function (m) {
+          return '<li><span>' + new Date(m.created_at).toLocaleDateString('pt-BR') + ' · ' + esc(m.reason) + '</span>' +
+            '<strong class="' + (m.amount_cents < 0 ? 'valor-menos' : 'valor-mais') + '">' + (m.amount_cents < 0 ? '− ' : '+ ') + dinheiro(Math.abs(m.amount_cents)) + '</strong></li>';
+        }).join('') + '</ul>' : '<p class="dica">Nenhuma movimentação de crédito.</p>') +
+        '<h4>Últimas compras</h4>' + (r[0].data.length ? '<ul class="cliente-lista">' + r[0].data.map(function (o) {
+          return '<li><span>Pedido #' + esc(o.number) + ' · ' + new Date(o.created_at).toLocaleDateString('pt-BR') + ' · ' + esc(NOME_STATUS[o.status] || o.status) + '<br>' +
+            o.order_items.map(function (i) { return i.quantity + 'x ' + esc(i.product_name); }).join(', ') + '</span><strong>' + dinheiro(o.total_cents) + '</strong></li>';
+        }).join('') + '</ul>' : '<p class="dica">Nenhuma compra ainda.</p>');
+    });
+  }
+  $('#lista-clientes').addEventListener('click', function (evento) {
+    var botao = evento.target.closest('[data-cliente]');
+    if (!botao) return;
+    clienteAberto = clienteAberto === botao.dataset.cliente ? null : botao.dataset.cliente;
+    desenharClientes();
+  });
+  $('#lista-clientes').addEventListener('submit', function (evento) {
+    var ajuste = evento.target.closest('[data-credito]');
+    if (!ajuste) return;
+    evento.preventDefault();
+    var centavos = paraCentavos(ajuste.valor.value);
+    if (!(centavos > 0)) { avisar('Informe um valor válido, por exemplo 50,00.'); return; }
+    if (ajuste.motivo.value.trim().length < 3) { avisar('Informe o motivo do ajuste.'); return; }
+    var botao = ajuste.querySelector('button[type="submit"]');
+    botao.disabled = true;
+    sb.rpc('admin_adjust_credit', { p_user: ajuste.dataset.credito, p_amount_cents: centavos * Number(ajuste.tipo.value), p_reason: ajuste.motivo.value }).then(function (r) {
+      if (r.error) {
+        botao.disabled = false;
+        avisar(r.error.code === 'P0001' ? r.error.message : 'Não foi possível salvar o ajuste.');
+        return;
+      }
+      avisar('Crédito atualizado.');
+      carregarClientes();
+    });
+  });
+  $('#busca-clientes').addEventListener('input', desenharClientes);
+  var trocas = [];
+  var NOME_TROCA = { aberto: 'Em análise', aprovado: 'Aprovada', recusado: 'Recusada', concluido: 'Concluída' };
+  function carregarTrocas() {
+    return sb.from('order_requests').select('*,orders(number,customer_name,phone,total_cents,credit_cents)').order('created_at', { ascending: false }).limit(200).then(function (r) {
+      if (r.error) { $('#lista-trocas').innerHTML = '<p class="estado">Não foi possível carregar as solicitações.</p>'; return; }
+      trocas = r.data;
+      desenharTrocas();
+    });
+  }
+  function desenharTrocas() {
+    var abertas = trocas.filter(function (t) { return t.status === 'aberto'; }).length;
+    $('[data-aba="trocas"]').textContent = abertas ? 'Trocas (' + abertas + ')' : 'Trocas';
+    if (!trocas.length) { $('#lista-trocas').innerHTML = '<p class="estado">Nenhuma solicitação por aqui.</p>'; return; }
+    $('#lista-trocas').innerHTML = '<ul class="pedidos">' + trocas.map(function (t) {
+      var ativa = t.status === 'aberto' || t.status === 'aprovado';
+      return '<li class="pedido"><div class="pedido-topo"><h3>' + (t.kind === 'troca' ? 'Troca' : 'Devolução') + ' do pedido #' + esc(t.orders.number) + '</h3>' +
+        '<span class="selo selo-espera">' + esc(NOME_TROCA[t.status] || t.status) + '</span></div>' +
+        '<p>' + new Date(t.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) + ' · ' + esc(t.orders.customer_name) + ' · ' + esc(t.orders.phone) + '</p>' +
+        '<p>Peças: ' + esc(t.items) + '</p><p>Motivo: ' + esc(t.reason) + '</p>' +
+        (t.credit_cents ? '<p>Crédito lançado: ' + dinheiro(t.credit_cents) + '</p>' : '') +
+        (t.admin_note ? '<p>Resposta: ' + esc(t.admin_note) + '</p>' : '') +
+        (ativa ? '<form class="troca-form" data-troca="' + esc(t.id) + '">' +
+          '<label class="campo">Resposta para o cliente (opcional)<input name="nota" maxlength="300" value="' + esc(t.admin_note || '') + '"></label>' +
+          (t.kind === 'troca' ? '<label class="campo">Crédito ao concluir (R$)<input name="credito" inputmode="decimal" placeholder="0,00"></label>' : '') +
+          '<div class="pedido-acoes">' + (t.status === 'aberto' ? '<button class="botao-texto" type="submit" value="aprovado">Aprovar</button>' : '') +
+          '<button class="botao botao-vinho" type="submit" value="concluido">Concluir</button>' +
+          '<button class="botao-texto botao-perigo" type="submit" value="recusado">Recusar</button></div></form>' : '') + '</li>';
+    }).join('') + '</ul>';
+  }
+  $('#lista-trocas').addEventListener('submit', function (evento) {
+    var form = evento.target.closest('[data-troca]');
+    if (!form) return;
+    evento.preventDefault();
+    var acao = evento.submitter ? evento.submitter.value : '';
+    var texto = form.credito ? form.credito.value.trim() : '';
+    var credito = texto ? Math.round(parseFloat(texto.replace(/\./g, '').replace(',', '.')) * 100) : 0;
+    if (!(credito >= 0) || (credito > 0 && acao !== 'concluido')) { avisar('Informe o crédito só ao concluir, por exemplo 129,90.'); return; }
+    sb.rpc('admin_resolve_request', { p_request: form.dataset.troca, p_status: acao, p_note: form.nota.value, p_credit_cents: credito }).then(function (r) {
+      avisar(r.error ? (r.error.code === 'P0001' ? r.error.message : 'Não foi possível atualizar.') : 'Solicitação atualizada.');
+      carregarTrocas();
+    });
   });
   $('#lista-pedidos').addEventListener('click', function (evento) {
     var finalizar = evento.target.closest('[data-finalizar]');

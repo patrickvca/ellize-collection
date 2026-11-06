@@ -154,7 +154,7 @@
     '<footer class="rodape sobre-escuro"><div class="container"><div class="rodape-grade">' +
     '<div class="rodape-marca"><img class="rodape-logo" src="assets/img/logo-claro.svg" alt="Ellize Collection" width="190" height="95" loading="lazy"></div>' +
     '<nav aria-label="Site"><h2>Site</h2><ul><li><a href="loja.html">Novidades</a></li><li><a href="' + inicio + '#colecoes">Coleções</a></li>' +
-    '<li><a href="' + inicio + '#marca">A marca</a></li><li><a href="' + inicio + '#loja">Loja física</a></li><li><a href="conta.html">Minha conta</a></li></ul></nav>' +
+    '<li><a href="' + inicio + '#marca">A marca</a></li><li><a href="' + inicio + '#loja">Loja física</a></li><li><a href="conta.html">Minha conta</a></li><li><a href="politicas.html">Trocas e devoluções</a></li></ul></nav>' +
     '<div><h2>Contato</h2><ul><li><a href="' + CONFIG.whatsapp + '" target="_blank" rel="noopener">WhatsApp</a></li>' +
     '<li><a href="' + INSTAGRAM + '" target="_blank" rel="noopener">Instagram</a></li>' +
     '<li><a href="mailto:lookpremium96@gmail.com">E-mail</a></li></ul></div></div>' +

@@ -127,8 +127,34 @@
 .pedido p, .pedido ul { color: var(--tinta-suave); font-size: 0.9375rem; }
 .pedido-topo { display: flex; justify-content: space-between; gap: 1rem; }
 .pedido-status { color: var(--vinho); font-size: 0.875rem; }
-.pedido .botao { justify-self: start; margin-top: 0.5rem; }
+.pedido .botao { justify-self: start; }
 .pedido .botao[hidden] { display: none; }
+.pedido-botoes { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+.pedido-botoes:empty { display: none; }
+.pedido-entregue, .pedido-solicitacao { color: var(--vinho) !important; }
+.rastreio { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.25rem; margin: 0.75rem 0 0.25rem; padding: 0; list-style: none; font-size: 0.8125rem; color: var(--tinta-suave); }
+.rastreio li { position: relative; padding-top: 1.25rem; }
+.rastreio li::before { content: ""; position: absolute; top: 0.25rem; left: 0; width: 100%; height: 3px; border-radius: 2px; background: var(--linha); }
+.rastreio li.feita::before, .rastreio li.atual::before { background: var(--vinho); }
+.rastreio li.atual { color: var(--vinho); font-weight: 600; }
+.saldo-credito { margin-bottom: 1rem; padding: 0.75rem 1rem; border-radius: var(--raio-s); background: var(--marfim); color: var(--vinho); }
+.saldo-credito details { margin-top: 0.5rem; font-size: 0.9375rem; }
+.saldo-credito summary { cursor: pointer; }
+.credito-historico { display: grid; gap: 0.5rem; margin: 0.75rem 0 0; padding: 0; list-style: none; color: var(--tinta-suave); }
+.credito-historico li { display: flex; justify-content: space-between; gap: 1rem; }
+.credito-historico strong { flex: none; color: var(--vinho); }
+.credito-opcao { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9375rem; }
+.credito-opcao[hidden] { display: none; }
+.solicitacao { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--linha); }
+.solicitacao-pecas { display: grid; gap: 0.5rem; margin: 0; padding: 0; border: 0; font-size: 0.9375rem; }
+.solicitacao-pecas legend { margin-bottom: 0.5rem; padding: 0; font-size: 0.875rem; }
+.politica { max-width: var(--leitura); }
+.politica h1 { margin-bottom: 1rem; font-size: var(--t-h2); }
+.politica h2 { margin-top: 2rem; margin-bottom: 0.5rem; font-size: var(--t-h3); }
+.politica ol, .politica ul { display: grid; gap: 0.5rem; padding-left: 1.25rem; }
+.politica p + p { margin-top: 0.75rem; }
+.politica a { color: var(--vinho); text-decoration: underline; }
+@media (max-width: 479.98px) { .rastreio { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 @media (max-width: 959.98px) {
   .produtos { grid-template-columns: repeat(3, 1fr); }

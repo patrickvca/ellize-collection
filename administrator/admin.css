@@ -191,3 +191,17 @@ ul { margin: 0; padding: 0; list-style: none; }
 }
 
 .pedido-alerta { padding: 0.5rem 0.75rem; border-radius: var(--raio-s); background: #fbeaea; color: var(--erro); font-weight: 600; }
+.rastreio-form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.5rem; }
+.rastreio-form input { flex: 1; min-width: 180px; min-height: 40px; padding: 0.25rem 0.75rem; border: 1px solid var(--linha); border-radius: var(--raio-s); font: inherit; }
+.troca-form { display: grid; gap: 0.75rem; margin-top: 0.75rem; }
+.cliente-detalhe { display: grid; gap: 0.5rem; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--linha); }
+.cliente-detalhe h4 { margin-top: 0.75rem; font-size: 0.9375rem; }
+.cliente-saldo strong { color: var(--vinho); font-size: 1.125rem; }
+.credito-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); align-items: end; gap: 0.75rem; }
+.credito-motivo { grid-column: 1 / -1; }
+.credito-form .botao { justify-self: start; }
+.cliente-lista { display: grid; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+.cliente-lista li { display: flex; justify-content: space-between; gap: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--linha); font-size: 0.875rem; }
+.cliente-lista strong { flex: none; }
+.valor-mais { color: var(--sucesso); }
+.valor-menos { color: var(--erro); }
