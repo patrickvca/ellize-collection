@@ -5,6 +5,7 @@
     { auth: { storageKey: 'ellize-admin', persistSession: true, detectSessionInUrl: false } }
   );
   var categorias = [];
+  var CATEGORIAS_FIXAS = ['feminino', 'masculino'];
   var ATALHOS = ['PP', 'P', 'M', 'G', 'GG', 'Único'];
   var PAGAMENTOS = { pix: 'Pix', dinheiro: 'Dinheiro', debito: 'Cartão de débito', credito: 'Cartão de crédito', transferencia: 'Transferência', outro: 'Outro', nao_informado: 'Não informado' };
   var STATUS_FINALIZADO = [['pago', 'Pago'], ['enviado', 'Enviado'], ['entregue', 'Entregue'], ['cancelado', 'Cancelado']];
@@ -225,24 +226,37 @@
   function carregarCategorias() {
     return sb.from('categories').select('*').order('position').then(function (r) {
       if (r.error) { $('#lista-categorias').innerHTML = '<li class="estado">Não foi possível carregar as categorias.</li>'; return; }
-      categorias = r.data;
+      var ordemSalva = r.data.map(function (c) { return c.slug; }).join();
+      categorias = r.data.filter(categoriaFixa).sort(function (a, b) {
+        return CATEGORIAS_FIXAS.indexOf(a.slug) - CATEGORIAS_FIXAS.indexOf(b.slug);
+      }).concat(r.data.filter(function (c) { return !categoriaFixa(c); }));
       desenharCategorias();
+      if (categorias.map(function (c) { return c.slug; }).join() !== ordemSalva) salvarOrdem();
     });
   }
+  function categoriaFixa(c) { return CATEGORIAS_FIXAS.indexOf(c.slug) !== -1; }
+  function totalFixas() { return categorias.filter(categoriaFixa).length; }
   function desenharCategorias() {
     var caixa = $('#lista-categorias');
     if (!categorias.length) { caixa.innerHTML = '<li class="estado">Nenhuma categoria cadastrada.</li>'; return; }
     caixa.innerHTML = categorias.map(function (c, i) {
       var total = produtos.filter(function (p) { return p.tags.indexOf(c.slug) !== -1; }).length;
-      return '<li class="categoria" data-slug="' + esc(c.slug) + '"><span class="categoria-alca" data-arrastar title="Arraste para mudar a ordem" aria-hidden="true">⠿</span><div class="categoria-ordem">' +
-        '<button class="fechar" type="button" data-subir="' + esc(c.slug) + '" aria-label="Mover ' + esc(c.name) + ' para cima"' + (i === 0 ? ' disabled' : '') + '>↑</button>' +
-        '<button class="fechar" type="button" data-descer="' + esc(c.slug) + '" aria-label="Mover ' + esc(c.name) + ' para baixo"' + (i === categorias.length - 1 ? ' disabled' : '') + '>↓</button></div>' +
-        '<label class="categoria-capa' + (c.image ? ' tem-capa' : '') + '" title="Escolher a foto de capa de ' + esc(c.name) + '">' +
+      var capaHTML = '<label class="categoria-capa' + (c.image ? ' tem-capa' : '') + '" title="Escolher a foto de capa de ' + esc(c.name) + '">' +
         (c.image ? '<img src="' + esc(c.image) + '" alt="" width="48" height="60">' : '<span>Capa</span>') +
-        '<input type="file" accept="image/*" data-capa="' + esc(c.slug) + '" aria-label="Escolher a foto de capa de ' + esc(c.name) + '"></label>' +
+        '<input type="file" accept="image/*" data-capa="' + esc(c.slug) + '" aria-label="Escolher a foto de capa de ' + esc(c.name) + '"></label>';
+      var tirarCapaHTML = c.image ? '<button class="botao-texto" type="button" data-tirar-capa="' + esc(c.slug) + '">Tirar capa</button>' : '';
+      if (categoriaFixa(c)) {
+        return '<li class="categoria categoria-fixa" data-slug="' + esc(c.slug) + '" data-fixa><span class="categoria-trava">Fixa</span>' + capaHTML +
+          '<strong class="categoria-nome">' + esc(c.name) + '</strong>' +
+          '<span class="categoria-total">' + total + (total === 1 ? ' produto' : ' produtos') + '</span>' + tirarCapaHTML + '</li>';
+      }
+      return '<li class="categoria" data-slug="' + esc(c.slug) + '"><span class="categoria-alca" data-arrastar title="Arraste para mudar a ordem" aria-hidden="true">⠿</span><div class="categoria-ordem">' +
+        '<button class="fechar" type="button" data-subir="' + esc(c.slug) + '" aria-label="Mover ' + esc(c.name) + ' para cima"' + (i === totalFixas() ? ' disabled' : '') + '>↑</button>' +
+        '<button class="fechar" type="button" data-descer="' + esc(c.slug) + '" aria-label="Mover ' + esc(c.name) + ' para baixo"' + (i === categorias.length - 1 ? ' disabled' : '') + '>↓</button></div>' +
+        capaHTML +
         '<input data-nome="' + esc(c.slug) + '" value="' + esc(c.name) + '" maxlength="40" aria-label="Nome da categoria">' +
         '<span class="categoria-total">' + total + (total === 1 ? ' produto' : ' produtos') + '</span>' +
-        (c.image ? '<button class="botao-texto" type="button" data-tirar-capa="' + esc(c.slug) + '">Tirar capa</button>' : '') +
+        tirarCapaHTML +
         '<button class="botao-texto botao-perigo" type="button" data-tirar-categoria="' + esc(c.slug) + '">Remover</button></li>';
     }).join('');
   }
@@ -278,7 +292,7 @@
   function moverCategoria(slug, sentido) {
     var i = categorias.findIndex(function (c) { return c.slug === slug; });
     var alvo = i + sentido;
-    if (alvo < 0 || alvo >= categorias.length) return;
+    if (alvo < totalFixas() || alvo >= categorias.length) return;
     var movida = categorias.splice(i, 1)[0];
     categorias.splice(alvo, 0, movida);
     desenharCategorias();
@@ -305,7 +319,7 @@
     var caixa = linhaArrastada.parentNode;
     var antes = linhaArrastada.previousElementSibling;
     var depois = linhaArrastada.nextElementSibling;
-    while (antes && evento.clientY < antes.getBoundingClientRect().top + antes.offsetHeight / 2) {
+    while (antes && !antes.hasAttribute('data-fixa') && evento.clientY < antes.getBoundingClientRect().top + antes.offsetHeight / 2) {
       caixa.insertBefore(antes, linhaArrastada.nextElementSibling);
       antes = linhaArrastada.previousElementSibling;
     }

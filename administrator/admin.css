@@ -215,3 +215,7 @@ ul { margin: 0; padding: 0; list-style: none; }
 .categoria-capa img { width: 100%; height: 100%; object-fit: cover; }
 .categoria .categoria-capa input { position: absolute; inset: 0; width: 100%; min-height: 0; padding: 0; opacity: 0; cursor: pointer; }
 @media (max-width: 639.98px) { .categoria { grid-template-columns: auto auto auto minmax(0, 1fr); } .categoria-total, .categoria .botao-texto { grid-column: 4; justify-self: start; } }
+.categoria-fixa { background: var(--marfim); }
+.categoria-trava { grid-column: 1 / span 2; justify-self: start; padding: 0.125rem 0.5rem; border-radius: var(--raio-pill); background: var(--vinho); color: var(--creme); font-size: 0.75rem; }
+.categoria-nome { font-weight: 600; padding-inline: 0.75rem; }
+@media (max-width: 639.98px) { .categoria-trava { grid-column: 1 / span 2; } }
