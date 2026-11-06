@@ -125,7 +125,9 @@ Deno.serve(async (req) => {
       .select('id,kind,service,price_cents,days');
     if (erroSalvar) throw erroSalvar;
 
-    return responder({ cep, city: endereco.localidade, state: endereco.uf, local, options: salvas });
+    return responder({
+      cep, city: endereco.localidade, state: endereco.uf, street: endereco.logradouro, district: endereco.bairro, local, options: salvas,
+    });
   } catch (erro) {
     console.error(erro);
     return responder({ error: 'Não foi possível calcular o frete agora. Tente novamente.' });

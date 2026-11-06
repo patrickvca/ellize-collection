@@ -352,6 +352,24 @@
           return '<label><input type="radio" name="frete" value="' + n + '"' + (n === 0 ? ' checked' : '') + '><span>' + detalhes + '</span></label>';
         }).join('') + '</fieldset>';
     }
+    function preencherEndereco(dados) {
+      var form = $('#form-pedido');
+      if (!form || form.dataset.cep === dados.cep) return;
+      form.dataset.cep = dados.cep;
+      form.rua.value = dados.street || '';
+      form.bairro.value = dados.district || '';
+      form.numero.value = '';
+      form.complemento.value = '';
+      form.cidade.value = dados.city;
+      form.estado.value = dados.state;
+    }
+    function textoEndereco(form) {
+      return [form.rua.value, form.numero.value, form.complemento.value, form.bairro.value, form.cidade.value + ' - ' + form.estado.value]
+        .map(function (parte) { return parte.trim(); }).filter(Boolean).join(', ');
+    }
+    function campoFaltando(form) {
+      return [form.rua, form.numero, form.bairro].filter(function (campo) { return !campo.value.trim(); })[0];
+    }
     function calcularFrete(cep) {
       var caixa = $('#frete-resultado');
       var consulta = ++consultaFrete;
@@ -371,6 +389,7 @@
         if (consulta !== consultaFrete) return;
         if (dados.error) { falhar(dados.error, dados.contato); return; }
         frete = { cep: dados.cep, cidade: dados.city + ' - ' + dados.state, opcoes: dados.options, escolhida: dados.options[0], pecas: quantidade };
+        preencherEndereco(dados);
         try { localStorage.setItem('ellize:cep', dados.cep); } catch (e) {}
         desenharFrete();
         atualizarTotais();
@@ -421,7 +440,13 @@
         '<fieldset class="opcoes"><legend>Como quer pagar?</legend>' +
         '<label><input type="radio" name="pagamento" value="pix" checked><span id="opcao-pix"></span></label>' +
         '<label><input type="radio" name="pagamento" value="cartao"><span id="opcao-cartao"></span></label></fieldset>' +
-        '<label class="campo" id="campo-endereco" hidden>Endereço com número e bairro<textarea name="endereco" rows="3" autocomplete="street-address" maxlength="300"></textarea></label>' +
+        '<fieldset class="endereco" id="campo-endereco" hidden><legend>Endereço de entrega</legend>' +
+        '<label class="campo">Rua<input name="rua" autocomplete="address-line1" maxlength="120"></label>' +
+        '<div class="endereco-linha endereco-numero"><label class="campo">Número<input name="numero" inputmode="text" maxlength="10"></label>' +
+        '<label class="campo">Complemento (opcional)<input name="complemento" autocomplete="address-line2" maxlength="60"></label></div>' +
+        '<label class="campo">Bairro<input name="bairro" maxlength="60"></label>' +
+        '<div class="endereco-linha endereco-cidade"><label class="campo">Cidade<input name="cidade" readonly tabindex="-1"></label>' +
+        '<label class="campo">Estado<input name="estado" readonly tabindex="-1"></label></div></fieldset>' +
         '<label class="campo">Observação (opcional)<textarea name="nota" rows="2" maxlength="500"></textarea></label>' +
         '<p class="mensagem mensagem-erro" id="erro-pedido" role="alert" hidden></p>' +
         '<button class="botao botao-vinho botao-largo" type="submit">Fechar pedido</button>' +
@@ -443,6 +468,13 @@
         $('#form-frete').cep.focus();
         return;
       }
+      var faltando = entrega.kind === 'retirada' ? null : campoFaltando(form);
+      if (faltando) {
+        erro.textContent = 'Preencha rua, número e bairro para a entrega.';
+        erro.hidden = false;
+        faltando.focus();
+        return;
+      }
       ocupado(botao, true, 'Enviando pedido…');
       sb.rpc('create_order', {
         p_items: linhas.map(function (i) { return { product_id: i.id, color: i.color, size: i.size, quantity: i.qty }; }),
@@ -450,7 +482,7 @@
         p_phone: form.telefone.value,
         p_payment: form.pagamento.value,
         p_quote: entrega.id,
-        p_address: entrega.kind === 'retirada' ? null : form.endereco.value,
+        p_address: entrega.kind === 'retirada' ? null : textoEndereco(form),
         p_note: form.nota.value
       }).then(function (resposta) {
         if (resposta.error) {
@@ -463,7 +495,7 @@
         var texto = 'Olá! Fiz o pedido #' + pedido.number + ' no site da Ellize Collection.\n\n' +
           linhas.map(function (i) { return i.qty + 'x ' + produtos[i.id].name + ' (' + (i.color !== 'Única' ? i.color + ', ' : '') + i.size + ')'; }).join('\n') +
           '\n\nTotal: ' + dinheiro(pedido.total_cents) + '\nPagamento: ' + (form.pagamento.value === 'pix' ? 'Pix' : 'Cartão') + '\nEntrega: ' + entrega.service +
-          (entrega.kind === 'retirada' ? '' : '\nFrete: ' + dinheiro(entrega.price_cents) + (entrega.days ? ' (' + prazoFrete(entrega) + ')' : '') + '\nEndereço: ' + form.endereco.value.trim() + ', CEP ' + formatarCep(frete.cep));
+          (entrega.kind === 'retirada' ? '' : '\nFrete: ' + dinheiro(entrega.price_cents) + (entrega.days ? ' (' + prazoFrete(entrega) + ')' : '') + '\nEndereço: ' + textoEndereco(form) + ', CEP ' + formatarCep(frete.cep));
         var linkPedido = WHATSAPP + '?text=' + encodeURIComponent(texto);
         ocupado(botao, true, 'Abrindo o pagamento…');
         pagamento({ order_id: pedido.id }).then(function (cobranca) {
