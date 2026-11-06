@@ -234,13 +234,26 @@
     if (!categorias.length) { caixa.innerHTML = '<li class="estado">Nenhuma categoria cadastrada.</li>'; return; }
     caixa.innerHTML = categorias.map(function (c, i) {
       var total = produtos.filter(function (p) { return p.tags.indexOf(c.slug) !== -1; }).length;
-      return '<li class="categoria"><div class="categoria-ordem">' +
+      return '<li class="categoria" data-slug="' + esc(c.slug) + '"><span class="categoria-alca" data-arrastar title="Arraste para mudar a ordem" aria-hidden="true">⠿</span><div class="categoria-ordem">' +
         '<button class="fechar" type="button" data-subir="' + esc(c.slug) + '" aria-label="Mover ' + esc(c.name) + ' para cima"' + (i === 0 ? ' disabled' : '') + '>↑</button>' +
         '<button class="fechar" type="button" data-descer="' + esc(c.slug) + '" aria-label="Mover ' + esc(c.name) + ' para baixo"' + (i === categorias.length - 1 ? ' disabled' : '') + '>↓</button></div>' +
+        '<label class="categoria-capa' + (c.image ? ' tem-capa' : '') + '" title="Escolher a foto de capa de ' + esc(c.name) + '">' +
+        (c.image ? '<img src="' + esc(c.image) + '" alt="" width="48" height="60">' : '<span>Capa</span>') +
+        '<input type="file" accept="image/*" data-capa="' + esc(c.slug) + '" aria-label="Escolher a foto de capa de ' + esc(c.name) + '"></label>' +
         '<input data-nome="' + esc(c.slug) + '" value="' + esc(c.name) + '" maxlength="40" aria-label="Nome da categoria">' +
         '<span class="categoria-total">' + total + (total === 1 ? ' produto' : ' produtos') + '</span>' +
+        (c.image ? '<button class="botao-texto" type="button" data-tirar-capa="' + esc(c.slug) + '">Tirar capa</button>' : '') +
         '<button class="botao-texto botao-perigo" type="button" data-tirar-categoria="' + esc(c.slug) + '">Remover</button></li>';
     }).join('');
+  }
+  function salvarCapa(categoria, imagem) {
+    var antiga = categoria.image;
+    return sb.from('categories').update({ image: imagem }).eq('slug', categoria.slug).select().then(function (r) {
+      if (r.error || !r.data.length) throw new Error('capa');
+      categoria.image = imagem;
+      if (antiga) removerFoto(antiga);
+      desenharCategorias();
+    });
   }
   function desenharMarcas(marcadas) {
     $('#categorias').innerHTML = categorias.map(function (c) {
@@ -272,10 +285,50 @@
     var seletor = sentido < 0 ? '[data-subir="' : '[data-descer="';
     var botao = $(seletor + slug + '"]');
     if (botao && !botao.disabled) botao.focus();
+    salvarOrdem();
+  }
+  function salvarOrdem() {
     sb.rpc('admin_reorder_categories', { p_slugs: categorias.map(function (c) { return c.slug; }) }).then(function (r) {
       if (r.error) { avisar('Não foi possível salvar a ordem.'); carregarCategorias(); }
     });
   }
+  /* A linha arrastada fica no lugar e as vizinhas trocam com ela, para o navegador não perder o ponteiro. */
+  var linhaArrastada = null;
+  $('#lista-categorias').addEventListener('pointerdown', function (evento) {
+    if (!evento.target.closest('[data-arrastar]')) return;
+    evento.preventDefault();
+    linhaArrastada = evento.target.closest('.categoria');
+    linhaArrastada.classList.add('arrastando');
+  });
+  document.addEventListener('pointermove', function (evento) {
+    if (!linhaArrastada) return;
+    var caixa = linhaArrastada.parentNode;
+    var antes = linhaArrastada.previousElementSibling;
+    var depois = linhaArrastada.nextElementSibling;
+    while (antes && evento.clientY < antes.getBoundingClientRect().top + antes.offsetHeight / 2) {
+      caixa.insertBefore(antes, linhaArrastada.nextElementSibling);
+      antes = linhaArrastada.previousElementSibling;
+    }
+    while (depois && evento.clientY > depois.getBoundingClientRect().top + depois.offsetHeight / 2) {
+      caixa.insertBefore(depois, linhaArrastada);
+      depois = linhaArrastada.nextElementSibling;
+    }
+  });
+  function soltarCategoria(evento) {
+    if (!linhaArrastada) return;
+    var linhas = linhaArrastada.parentNode.children;
+    linhaArrastada.classList.remove('arrastando');
+    linhaArrastada = null;
+    var ordem = [].map.call(linhas, function (l) { return l.dataset.slug; });
+    var mudou = ordem.some(function (slug, i) { return slug !== categorias[i].slug; });
+    if (evento.type === 'pointerup' && mudou) {
+      categorias.sort(function (a, b) { return ordem.indexOf(a.slug) - ordem.indexOf(b.slug); });
+      salvarOrdem();
+    }
+    desenharCategorias();
+  }
+  document.addEventListener('pointerup', soltarCategoria);
+  document.addEventListener('pointercancel', soltarCategoria);
   $('#form-categoria').addEventListener('submit', function (evento) {
     evento.preventDefault();
     var campo = $('#nova-categoria');
@@ -285,6 +338,12 @@
     }, function (falha) { avisar(falha.message); });
   });
   $('#lista-categorias').addEventListener('click', function (evento) {
+    var tirarCapa = evento.target.closest('[data-tirar-capa]');
+    if (tirarCapa) {
+      var semCapa = categorias.filter(function (c) { return c.slug === tirarCapa.dataset.tirarCapa; })[0];
+      salvarCapa(semCapa, null).then(function () { avisar('Capa removida.'); }, function () { avisar('Não foi possível remover a capa.'); });
+      return;
+    }
     var subir = evento.target.closest('[data-subir]');
     var descer = evento.target.closest('[data-descer]');
     var tirar = evento.target.closest('[data-tirar-categoria]');
@@ -300,6 +359,19 @@
     });
   });
   $('#lista-categorias').addEventListener('change', function (evento) {
+    if (evento.target.matches('[data-capa]')) {
+      var alvoCapa = categorias.filter(function (c) { return c.slug === evento.target.dataset.capa; })[0];
+      var arquivoCapa = evento.target.files[0];
+      if (!arquivoCapa) return;
+      avisar('Enviando a capa…');
+      enviarFoto(arquivoCapa).then(function (url) {
+        return salvarCapa(alvoCapa, url).catch(function (erro) { removerFoto(url); throw erro; });
+      }).then(function () { avisar('Capa salva.'); }, function () {
+        avisar('Não foi possível salvar a capa.');
+        desenharCategorias();
+      });
+      return;
+    }
     var campo = evento.target.closest('[data-nome]');
     if (!campo) return;
     var categoria = categorias.filter(function (c) { return c.slug === campo.dataset.nome; })[0];
