@@ -418,10 +418,29 @@
     coluna.insertAdjacentHTML('beforeend', html);
     coluna.hidden = !html;
   }
+  function desenharDestaques(cats, pecas) {
+    var grade = document.getElementById('destaques-grade');
+    if (!grade) return;
+    var TEXTURAS = ['cetim-vinho', 'cetim-rose', 'cetim-caramelo', 'cetim-preto'];
+    var usadas = [];
+    var texturas = 0;
+    grade.innerHTML = cats.map(function (c) {
+      var peca = pecas.filter(function (p) {
+        return p.tags.indexOf(c.slug) !== -1 && /^https?:/.test(p.image || '') && usadas.indexOf(p.image) === -1;
+      })[0];
+      if (peca) usadas.push(peca.image);
+      var foto = peca ? peca.image : 'assets/img/' + TEXTURAS[texturas++ % TEXTURAS.length] + '.webp';
+      return '<a class="painel sobre-escuro" href="loja.html?c=' + encodeURIComponent(c.slug) + '">' +
+        '<img src="' + esc(foto) + '" alt="" width="800" height="1000" loading="lazy">' +
+        '<h3>' + esc(c.name) + '</h3>' +
+        '<span class="painel-chamada">Ver peças ' + icone('i-seta', true) + '</span></a>';
+    }).join('');
+  }
   Promise.all([categorias(), produtos()]).then(function (dados) {
     var cats = dados[0];
     var pecas = dados[1];
     if (!cats.length) return;
+    desenharDestaques(cats, pecas);
     var DEPARTAMENTOS = ['feminino', 'masculino'];
     var outras = cats.filter(function (c) { return DEPARTAMENTOS.indexOf(c.slug) === -1; });
     trocarLinks('Categorias', linkCategoria('Ver todas') + linkCategoria('Promoções', 'promocao') +

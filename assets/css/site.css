@@ -287,7 +287,7 @@ section[id] { scroll-margin-top: calc(var(--header-h) + 24px); }
   .colecoes-grade { grid-template-columns: 1fr; }
   .painel { aspect-ratio: 5 / 4; }
   .destaques-grade {
-    grid-template-columns: repeat(3, 72%); overflow-x: auto; scroll-snap-type: x mandatory;
+    grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 72%; overflow-x: auto; scroll-snap-type: x mandatory;
     margin-inline: calc(-1 * var(--gutter)); padding-inline: var(--gutter);
     scroll-padding-inline: var(--gutter); scrollbar-width: none;
   }
