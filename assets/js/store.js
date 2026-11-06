@@ -304,7 +304,7 @@
     var consultaFrete = 0;
     var saldoCredito = 0;
     function valorFrete() { return frete && frete.escolhida ? frete.escolhida.price_cents : 0; }
-    function usandoCredito() { var campo = $('#usar-credito'); return !!(campo && campo.checked); }
+    function usandoCredito() { var campo = $('#usar-credito'); return saldoCredito > 0 && !!(campo && campo.checked); }
     function menosCredito(valor) { return usandoCredito() ? Math.max(0, valor - saldoCredito) : valor; }
     function pecas() { return linhasValidas().reduce(function (soma, i) { return soma + i.qty; }, 0); }
     function total(pix) {
@@ -457,7 +457,7 @@
         '<label class="campo">Bairro<input name="bairro" maxlength="60"></label>' +
         '<div class="endereco-linha endereco-cidade"><label class="campo">Cidade<input name="cidade" readonly tabindex="-1"></label>' +
         '<label class="campo">Estado<input name="estado" readonly tabindex="-1"></label></div></fieldset>' +
-        '<label class="credito-opcao" id="opcao-credito" hidden><input type="checkbox" id="usar-credito" checked> <span id="texto-credito"></span></label>' +
+        '<label class="credito-opcao" id="opcao-credito" hidden><input type="checkbox" id="usar-credito"> <span id="texto-credito"></span></label>' +
         '<label class="campo">Observação (opcional)<textarea name="nota" rows="2" maxlength="500"></textarea></label>' +
         '<p class="mensagem mensagem-erro" id="erro-pedido" role="alert" hidden></p>' +
         '<button class="botao botao-vinho botao-largo" type="submit">Fechar pedido</button>' +
@@ -470,7 +470,7 @@
         if (r.error) return;
         saldoCredito = r.data.reduce(function (soma, c) { return soma + c.amount_cents; }, 0);
         if (saldoCredito <= 0) { saldoCredito = 0; return; }
-        $('#texto-credito').textContent = 'Usar meu crédito de ' + dinheiro(saldoCredito);
+        $('#texto-credito').textContent = 'Usar crédito disponível: ' + dinheiro(saldoCredito);
         $('#opcao-credito').hidden = false;
         atualizarTotais();
       });
