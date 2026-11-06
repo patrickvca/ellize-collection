@@ -119,6 +119,8 @@
 .pedido p, .pedido ul { color: var(--tinta-suave); font-size: 0.9375rem; }
 .pedido-topo { display: flex; justify-content: space-between; gap: 1rem; }
 .pedido-status { color: var(--vinho); font-size: 0.875rem; }
+.pedido .botao { justify-self: start; margin-top: 0.5rem; }
+.pedido .botao[hidden] { display: none; }
 
 @media (max-width: 959.98px) {
   .produtos { grid-template-columns: repeat(3, 1fr); }

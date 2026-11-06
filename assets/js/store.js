@@ -47,6 +47,22 @@
       (emPromocao(produto) ? '<span class="selo-exemplo selo-promo">Promoção</span>' : '') +
       (esgotado(produto) ? '<span class="selo-exemplo selo-esgotado">Esgotado</span>' : '') + '</span>';
   }
+  function pagamento(corpo) {
+    return sb.auth.getSession().then(function (r) {
+      var sessao = r.data.session;
+      var controle = new AbortController();
+      var limite = setTimeout(function () { controle.abort(); }, 15000);
+      return fetch(URL_SUPABASE + '/functions/v1/pagamento', {
+        method: 'POST',
+        signal: controle.signal,
+        headers: { 'Content-Type': 'application/json', apikey: CHAVE_PUBLICA, Authorization: 'Bearer ' + (sessao ? sessao.access_token : CHAVE_PUBLICA) },
+        body: JSON.stringify(corpo)
+      }).then(function (resposta) {
+        clearTimeout(limite);
+        return resposta.json();
+      });
+    }).catch(function () { return { error: 'Sem conexão. Tente novamente.' }; });
+  }
   function traduzirErro(erro) {
     var m = (erro && erro.message) || '';
     if (erro && erro.code === 'P0001') return m;
@@ -409,7 +425,7 @@
         '<label class="campo">Observação (opcional)<textarea name="nota" rows="2" maxlength="500"></textarea></label>' +
         '<p class="mensagem mensagem-erro" id="erro-pedido" role="alert" hidden></p>' +
         '<button class="botao botao-vinho botao-largo" type="submit">Fechar pedido</button>' +
-        '<p class="nota-pequena">Ao fechar, você vai para o WhatsApp da loja para combinar o pagamento.</p></form>';
+        '<p class="nota-pequena">Ao fechar, você recebe as instruções para pagar.</p></form>';
       $('#form-pedido').addEventListener('submit', enviarPedido);
       atualizarTotais();
     }
@@ -449,13 +465,24 @@
           '\n\nTotal: ' + dinheiro(pedido.total_cents) + '\nPagamento: ' + (form.pagamento.value === 'pix' ? 'Pix' : 'Cartão') + '\nEntrega: ' + entrega.service +
           (entrega.kind === 'retirada' ? '' : '\nFrete: ' + dinheiro(entrega.price_cents) + (entrega.days ? ' (' + prazoFrete(entrega) + ')' : '') + '\nEndereço: ' + form.endereco.value.trim() + ', CEP ' + formatarCep(frete.cep));
         var linkPedido = WHATSAPP + '?text=' + encodeURIComponent(texto);
-        carrinho.salvar([]);
-        alvo.innerHTML = '<div class="estado estado-sucesso"><span class="etiqueta">Pedido #' + esc(pedido.number) + '</span>' +
-          '<h2>Pedido recebido</h2><p>Total de ' + dinheiro(pedido.total_cents) + '. Abrindo o WhatsApp para você combinar o pagamento. Se não abrir, use o botão abaixo.</p>' +
-          '<a class="botao botao-vinho" href="' + linkPedido + '">' + icone('i-whatsapp') + 'Enviar no WhatsApp</a>' +
-          '<a class="botao botao-linha" href="conta.html">Ver meus pedidos</a></div>';
-        window.scrollTo(0, 0);
-        location.href = linkPedido;
+        ocupado(botao, true, 'Abrindo o pagamento…');
+        pagamento({ order_id: pedido.id }).then(function (cobranca) {
+          carrinho.salvar([]);
+          if (cobranca.url) { location.href = cobranca.url; return; }
+          if (cobranca.disponivel) {
+            alvo.innerHTML = '<div class="estado estado-sucesso"><span class="etiqueta">Pedido #' + esc(pedido.number) + '</span>' +
+              '<h2>Pedido recebido</h2><p>Não foi possível abrir o pagamento agora. Você pode tentar de novo em Meus pedidos.</p>' +
+              '<a class="botao botao-vinho" href="conta.html">Ver meus pedidos</a></div>';
+            window.scrollTo(0, 0);
+            return;
+          }
+          alvo.innerHTML = '<div class="estado estado-sucesso"><span class="etiqueta">Pedido #' + esc(pedido.number) + '</span>' +
+            '<h2>Pedido recebido</h2><p>Total de ' + dinheiro(pedido.total_cents) + '. Abrindo o WhatsApp para você combinar o pagamento. Se não abrir, use o botão abaixo.</p>' +
+            '<a class="botao botao-vinho" href="' + linkPedido + '">' + icone('i-whatsapp') + 'Enviar no WhatsApp</a>' +
+            '<a class="botao botao-linha" href="conta.html">Ver meus pedidos</a></div>';
+          window.scrollTo(0, 0);
+          location.href = linkPedido;
+        });
       }, function () {
         ocupado(botao, false);
         erro.textContent = 'Sem conexão. Verifique sua internet e tente novamente.';
@@ -627,7 +654,7 @@
       $('#sair').addEventListener('click', function () {
         sb.auth.signOut().then(function () { desenharAcesso('entrar'); });
       });
-      sb.from('orders').select('number,total_cents,status,delivery,shipping_service,payment_choice,created_at,order_items(product_name,color,size,quantity)')
+      sb.from('orders').select('id,number,total_cents,status,delivery,shipping_service,payment_choice,payment_issue,stock_deducted,created_at,order_items(product_name,color,size,quantity)')
         .order('created_at', { ascending: false }).then(function (r) {
           var caixa = $('#pedidos');
           if (!caixa) return;
@@ -637,14 +664,36 @@
             caixa.innerHTML = estado('Nenhum pedido ainda', 'Seus pedidos aparecem aqui.', '<a class="botao botao-vinho" href="loja.html">Ver novidades</a>');
             return;
           }
-          caixa.innerHTML = '<ul class="pedidos">' + r.data.map(function (o) {
+          var AVISOS = {
+            aprovado: 'Pagamento aprovado. Seu pedido aparece como pago em instantes.',
+            pendente: 'Pagamento em análise. Avisaremos quando for confirmado.',
+            recusado: 'O pagamento não foi concluído. Você pode tentar de novo no pedido.'
+          };
+          var aviso = AVISOS[parametros.get('pagamento')];
+          caixa.innerHTML = (aviso ? '<p class="mensagem">' + aviso + '</p>' : '') + '<ul class="pedidos">' + r.data.map(function (o) {
             return '<li class="pedido"><div class="pedido-topo"><strong>Pedido #' + esc(o.number) + '</strong>' +
               '<span class="pedido-status">' + esc(STATUS[o.status] || o.status) + '</span></div>' +
               '<p>' + new Date(o.created_at).toLocaleDateString('pt-BR') + ' · ' + dinheiro(o.total_cents) + ' · ' + (o.payment_choice === 'pix' ? 'Pix' : 'Cartão') + ' · ' + (o.delivery === 'retirada' ? 'Retirar na loja' : esc(o.shipping_service || 'Receber em casa')) + '</p>' +
               '<ul>' + o.order_items.map(function (i) {
                 return '<li>' + i.quantity + 'x ' + esc(i.product_name) + ' (' + (i.color !== 'Única' ? esc(i.color) + ', ' : '') + esc(i.size) + ')</li>';
-              }).join('') + '</ul></li>';
+              }).join('') + '</ul>' +
+              (o.status === 'novo' && !o.stock_deducted && !o.payment_issue ? '<button class="botao botao-vinho" type="button" data-pagar="' + esc(o.id) + '" hidden>Pagar agora</button>' : '') + '</li>';
           }).join('') + '</ul>';
+          var botoes = caixa.querySelectorAll('[data-pagar]');
+          if (!botoes.length) return;
+          pagamento({ check: true }).then(function (estadoPagamento) {
+            if (estadoPagamento.disponivel) botoes.forEach(function (b) { b.hidden = false; });
+          });
+          caixa.addEventListener('click', function (evento) {
+            var botao = evento.target.closest('[data-pagar]');
+            if (!botao) return;
+            ocupado(botao, true, 'Abrindo o pagamento…');
+            pagamento({ order_id: botao.dataset.pagar }).then(function (cobranca) {
+              if (cobranca.url) { location.href = cobranca.url; return; }
+              ocupado(botao, false);
+              window.alert(cobranca.error || 'Não foi possível abrir o pagamento. Tente novamente.');
+            });
+          });
         });
     }
 

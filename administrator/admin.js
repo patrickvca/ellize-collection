@@ -30,6 +30,10 @@
   }
   function fotoSrc(caminho) { return /^https?:/.test(caminho) ? caminho : '../' + caminho; }
   function emPromocao(p) { return !!(p.promo_price_cents || p.promo_pix_price_cents); }
+  var STATUS_MP = {
+    approved: 'aprovado', pending: 'pendente', in_process: 'em análise', authorized: 'autorizado', in_mediation: 'em disputa',
+    rejected: 'recusado', cancelled: 'cancelado', refunded: 'devolvido', charged_back: 'contestado'
+  };
   function valorPedido(o, pix) {
     return (o.shipping_cents || 0) + o.order_items.reduce(function (soma, i) {
       return soma + i.quantity * (pix ? i.pix_price_cents : i.card_price_cents);
@@ -683,6 +687,8 @@
         (!o.stock_deducted && o.status !== 'cancelado'
           ? '<p>Cliente escolheu: ' + (o.payment_choice === 'pix' ? 'Pix' : 'Cartão') + ' · Cartão ' + dinheiro(valorPedido(o, false)) + ' · Pix ' + dinheiro(valorPedido(o, true)) + '</p>' : '') +
         (o.payment_method ? '<p>Pagamento: ' + esc(PAGAMENTOS[o.payment_method] || o.payment_method) + '</p>' : '') +
+        (o.mp_payment_id ? '<p>Mercado Pago: ' + esc(STATUS_MP[o.mp_status] || o.mp_status) + ' · nº ' + esc(o.mp_payment_id) + '. Devoluções são feitas no Mercado Pago.</p>' : '') +
+        (o.payment_issue ? '<p class="pedido-alerta">' + esc(o.payment_issue) + '</p>' : '') +
         '<p>' + (o.delivery === 'retirada' ? 'Retirar na loja'
           : esc(o.shipping_service || 'Receber em casa') + (o.shipping_cents ? ' · frete ' + dinheiro(o.shipping_cents) : '') +
             (o.shipping_days ? ' · até ' + esc(o.shipping_days) + ' dias' : '') + ': ' + esc(o.address || '') + (o.cep ? ' · CEP ' + esc(o.cep) : '')) + '</p>' +

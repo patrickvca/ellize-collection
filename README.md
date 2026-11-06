@@ -50,6 +50,15 @@ A função `supabase/functions/frete` recebe o CEP e os itens da sacola e grava 
 
 Segredos da função no Supabase: `MELHOR_ENVIO_TOKEN` e `MELHOR_ENVIO_USER_AGENT` (nome da aplicação com e-mail de contato). Peso, caixa, CEP de origem e valor da entrega local ficam no início de `index.ts`. Publique a função com a verificação de JWT desligada, porque a chave pública do site não é um JWT e visitantes sem login também calculam o frete.
 
+## Pagamento
+
+Com `MERCADO_PAGO_ACCESS_TOKEN` e `MERCADO_PAGO_WEBHOOK_SECRET` configurados nas funções do Supabase, o pedido segue para o Checkout Pro. Sem eles, o site mantém o fechamento pelo WhatsApp.
+
+- `supabase/functions/pagamento`: cria a cobrança do pedido. Pedido no Pix aceita só Pix, e pedido no cartão aceita só cartão.
+- `supabase/functions/pagamento-aviso`: recebe o aviso, confere a assinatura e consulta o pagamento no Mercado Pago. Se aprovado, o pedido vira pago e o estoque baixa.
+
+Problemas como peça sem estoque, valor diferente ou pagamento devolvido aparecem em vermelho no pedido do painel. Cancelar no painel não devolve o dinheiro: a devolução é feita no Mercado Pago. No Mercado Pago, o aviso aponta para `https://ukvivmgyxnuijmglidwm.supabase.co/functions/v1/pagamento-aviso`, com o evento Pagamentos. As duas funções são publicadas com a verificação de JWT desligada, porque autenticam por conta própria. Use `SITE_URL` ao trocar de domínio.
+
 ## Publicação
 
 Ao alterar CSS ou JS, troque o `?v=` nas páginas HTML para o navegador não misturar versões.

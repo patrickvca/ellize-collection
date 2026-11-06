@@ -189,3 +189,5 @@ ul { margin: 0; padding: 0; list-style: none; }
   .rel-navegar { width: 100%; justify-content: space-between; }
   .rel-navegar strong { min-width: 0; }
 }
+
+.pedido-alerta { padding: 0.5rem 0.75rem; border-radius: var(--raio-s); background: #fbeaea; color: var(--erro); font-weight: 600; }
