@@ -14,7 +14,6 @@
 .filtro:hover { border-color: var(--vinho); color: var(--vinho); }
 .filtro[aria-current="page"] { border-color: var(--vinho); background: var(--vinho); color: var(--creme); }
 
-.nota-exemplo { margin-bottom: 1.5rem; padding: 0.75rem 1rem; border-radius: var(--raio-s); background: var(--marfim); color: var(--tinta-suave); font-size: 0.9375rem; }
 
 .produtos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2rem 1rem; }
 .produto-foto { position: relative; display: block; overflow: hidden; margin-bottom: 0.5rem; border-radius: var(--raio-m); background: var(--marfim); aspect-ratio: 4 / 5; }
@@ -76,6 +75,10 @@
 .resumo-total strong { font-family: var(--serif); font-size: 1.5rem; font-weight: 400; color: var(--vinho); }
 #fechamento { display: grid; gap: 1rem; margin-top: 0.5rem; }
 .nota-pequena { color: var(--tinta-suave); font-size: 0.875rem; }
+.frete-linha { display: flex; gap: 0.5rem; }
+.frete-linha input { flex: 1; min-width: 0; }
+.opcoes-frete { flex-direction: column; }
+.opcoes-frete label, .opcoes-frete span { width: 100%; }
 
 .formulario { display: grid; gap: 1rem; }
 .campo { display: grid; gap: 0.375rem; font-size: 0.875rem; }

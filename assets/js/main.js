@@ -48,7 +48,7 @@
   var catalogo = null;
   function produtos() {
     if (!catalogo) {
-      catalogo = fetch(CONFIG.url + '/rest/v1/products?select=id,slug,name,price_cents,promo_price_cents,pix_price_cents,promo_pix_price_cents,stock,colors,image,sizes,tags,is_sample&order=created_at.desc&limit=200', {
+      catalogo = fetch(CONFIG.url + '/rest/v1/products?select=id,slug,name,price_cents,promo_price_cents,pix_price_cents,promo_pix_price_cents,stock,colors,image,sizes,tags&order=created_at.desc&limit=200', {
         headers: { apikey: CONFIG.chave }
       }).then(function (resposta) {
         if (!resposta.ok) throw new Error('catalogo');
@@ -242,7 +242,7 @@
           '<button class="botao-icone" type="button" data-acao="remover" data-n="' + n + '" aria-label="Remover ' + esc(p.name) + '">' + icone('i-lixo', true) + '</button></div></li>';
       }).join('') + '</ul>';
       sacolaRodape.innerHTML = (totalPix < total ? '' : '<p class="sacola-valor"><span>Subtotal</span><strong>' + dinheiro(total) + '</strong></p>') +
-        '<p class="sacola-valor"><span>Frete</span><strong>Combinado com a loja</strong></p>' +
+        '<p class="sacola-valor"><span>Frete</span><strong>Calculado pelo CEP</strong></p>' +
         (totalPix < total
           ? '<p class="sacola-valor sacola-total"><span>Total no cartão</span><strong>' + dinheiro(total) + '</strong></p>' +
             '<p class="sacola-valor sacola-total"><span>Total no Pix</span><strong>' + dinheiro(totalPix) + '</strong></p>'

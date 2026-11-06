@@ -2,7 +2,7 @@
 
 Site e loja online da Ellize Collection, moda feminina e masculina premium em Vitória da Conquista, BA.
 
-HTML, CSS e JavaScript puros, sem etapa de build. Login, produtos e pedidos ficam no Supabase. O pagamento e o frete são combinados pelo WhatsApp depois do pedido.
+HTML, CSS e JavaScript puros, sem etapa de build. Login, produtos e pedidos ficam no Supabase. O frete é calculado pelo CEP no carrinho e o pagamento é combinado pelo WhatsApp depois do pedido.
 
 ## Rodar localmente
 
@@ -40,6 +40,15 @@ Os painéis usam texturas de cetim (`cetim-*.webp`). Para usar fotos da loja, tr
 Produtos, categorias e pedidos são gerenciados no painel em `/administrator`. A ordem das categorias definida ali vale para a loja e o menu. Só entram contas cujo e-mail esteja na tabela `admins` e já confirmado. O painel não tem cadastro nem recuperação de senha. O estoque é controlado por cor e tamanho e só baixa quando a loja clica em Finalizar pedido, informando a forma de pagamento. Cada produto tem valor no cartão e valor no Pix. O cliente escolhe a forma ao fechar o pedido, e a forma confirmada ao finalizar define o valor final: Pix, dinheiro e transferência usam o valor no Pix, e débito, crédito e outro usam o valor no cartão. Dinheiro só é aceito em pedidos com retirada na loja. Ao finalizar, a loja também seleciona estado e cidade. Os relatórios contam apenas pedidos finalizados, pela data da finalização. Os produtos atuais são exemplos e devem ser trocados pelos reais.
 
 A chave em `store.js` é pública por natureza. A segurança vem das regras de acesso do banco, e o total do pedido é calculado no servidor.
+
+## Frete
+
+A função `supabase/functions/frete` recebe o CEP e os itens da sacola e grava as opções em `shipping_quotes`. O cliente envia só o id da opção, e o `create_order` soma o valor ao total. O frete fica fora do faturamento nos relatórios.
+
+- CEP de Vitória da Conquista (IBGE 2933307): retirada grátis ou entrega em domicílio por R$ 10,00.
+- Outros CEPs: PAC e SEDEX cotados no Melhor Envio. Sem token configurado, o site pede para falar com a loja.
+
+Segredos da função no Supabase: `MELHOR_ENVIO_TOKEN` e `MELHOR_ENVIO_USER_AGENT` (nome da aplicação com e-mail de contato). Peso, caixa, CEP de origem e valor da entrega local ficam no início de `index.ts`. Publique a função com a verificação de JWT desligada, porque a chave pública do site não é um JWT e visitantes sem login também calculam o frete.
 
 ## Publicação
 

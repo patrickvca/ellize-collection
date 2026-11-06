@@ -31,7 +31,7 @@
   function fotoSrc(caminho) { return /^https?:/.test(caminho) ? caminho : '../' + caminho; }
   function emPromocao(p) { return !!(p.promo_price_cents || p.promo_pix_price_cents); }
   function valorPedido(o, pix) {
-    return o.order_items.reduce(function (soma, i) {
+    return (o.shipping_cents || 0) + o.order_items.reduce(function (soma, i) {
       return soma + i.quantity * (pix ? i.pix_price_cents : i.card_price_cents);
     }, 0);
   }
@@ -469,7 +469,6 @@
       form.pix.value = p.pix_price_cents ? paraTexto(p.pix_price_cents) : '';
       form.promoPix.value = p.promo_pix_price_cents ? paraTexto(p.promo_pix_price_cents) : '';
       form.ativo.checked = p.active;
-      form.exemplo.checked = p.is_sample;
       grade = {
         cores: p.colors.map(function (c) { return { name: c.name, hex: c.hex || COR_PADRAO, image: c.image || null }; }),
         tamanhos: p.sizes.slice(),
@@ -597,8 +596,7 @@
       colors: grade.cores.map(function (c, i) { return { name: nomesCor[i], hex: c.hex, image: c.image || null }; }),
       stock: estoque,
       tags: [].map.call(form.querySelectorAll('[name="categoria"]:checked'), function (c) { return c.value; }),
-      active: form.ativo.checked,
-      is_sample: form.exemplo.checked
+      active: form.ativo.checked
     };
   }
   form.addEventListener('submit', function (evento) {
@@ -685,7 +683,9 @@
         (!o.stock_deducted && o.status !== 'cancelado'
           ? '<p>Cliente escolheu: ' + (o.payment_choice === 'pix' ? 'Pix' : 'Cartão') + ' · Cartão ' + dinheiro(valorPedido(o, false)) + ' · Pix ' + dinheiro(valorPedido(o, true)) + '</p>' : '') +
         (o.payment_method ? '<p>Pagamento: ' + esc(PAGAMENTOS[o.payment_method] || o.payment_method) + '</p>' : '') +
-        '<p>' + (o.delivery === 'envio' ? 'Receber em casa: ' + esc(o.address || '') : 'Retirar na loja') + '</p>' +
+        '<p>' + (o.delivery === 'retirada' ? 'Retirar na loja'
+          : esc(o.shipping_service || 'Receber em casa') + (o.shipping_cents ? ' · frete ' + dinheiro(o.shipping_cents) : '') +
+            (o.shipping_days ? ' · até ' + esc(o.shipping_days) + ' dias' : '') + ': ' + esc(o.address || '') + (o.cep ? ' · CEP ' + esc(o.cep) : '')) + '</p>' +
         (o.note ? '<p>Observação: ' + esc(o.note) + '</p>' : '') +
         '<ul class="pedido-itens">' + o.order_items.map(function (i) {
           return '<li>' + i.quantity + 'x ' + esc(i.product_name) + ' (' + variacaoItem(i) + ') · ' + dinheiro(i.unit_price_cents) + '</li>';

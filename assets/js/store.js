@@ -43,7 +43,7 @@
       '<a class="botao botao-vinho" href="' + esc(location.pathname.split('/').pop() + location.search) + '">Tentar novamente</a>');
   }
   function selo(produto) {
-    return '<span class="selos">' + (produto.is_sample ? '<span class="selo-exemplo">Exemplo</span>' : '') +
+    return '<span class="selos">' +
       (emPromocao(produto) ? '<span class="selo-exemplo selo-promo">Promoção</span>' : '') +
       (esgotado(produto) ? '<span class="selo-exemplo selo-esgotado">Esgotado</span>' : '') + '</span>';
   }
@@ -174,7 +174,6 @@
       if (resposta.error) { grade.innerHTML = erroCarregar(); return; }
       lista = resposta.data;
       lista.forEach(function (p) { mapa[p.id] = p; });
-      if (lista.some(function (p) { return p.is_sample; })) $('#nota-exemplo').hidden = false;
       var tamanhos = [];
       lista.forEach(function (p) {
         p.sizes.forEach(function (t) { if (tamanhos.indexOf(t) === -1) tamanhos.push(t); });
@@ -239,7 +238,7 @@
         '<a class="botao botao-linha botao-largo" target="_blank" rel="noopener" href="' + WHATSAPP + '?text=' +
         encodeURIComponent('Olá! Tenho uma dúvida sobre: ' + p.name) + '">' + icone('i-whatsapp') + 'Tirar dúvida no WhatsApp</a>' +
         '<div class="sanfona"><details open><summary>Sobre a peça</summary><p>' + esc(p.description) + '</p></details>' +
-        '<details><summary>Entrega</summary><p>Enviamos para todo o Brasil, e você também pode retirar na loja em Vitória da Conquista. O frete é combinado com a loja pelo WhatsApp.</p></details></div>' +
+        '<details><summary>Entrega</summary><p>Enviamos para todo o Brasil pelos Correios, com valor e prazo calculados pelo CEP na sacola. Em Vitória da Conquista, você retira na loja sem custo ou recebe em casa por R$ 10,00.</p></details></div>' +
         '</form>';
       $('#form-produto').addEventListener('submit', function (evento) {
         evento.preventDefault();
@@ -284,18 +283,26 @@
         return i;
       });
     }
+    var frete = null;
+    var consultaFrete = 0;
+    function valorFrete() { return frete && frete.escolhida ? frete.escolhida.price_cents : 0; }
+    function pecas() { return linhasValidas().reduce(function (soma, i) { return soma + i.qty; }, 0); }
     function total(pix) {
       return linhasValidas().reduce(function (soma, i) {
         return soma + i.qty * (pix ? precoPix(produtos[i.id]) : preco(produtos[i.id]));
       }, 0);
     }
     function atualizarTotais() {
-      var cartao = total(false);
-      var pix = total(true);
+      var escolhida = frete && frete.escolhida;
+      var cartao = total(false) + valorFrete();
+      var pix = total(true) + valorFrete();
+      $('#linha-frete').hidden = !escolhida;
+      $('#valor-frete').textContent = valorFrete() ? dinheiro(valorFrete()) : 'Grátis';
+      if ($('#campo-endereco')) $('#campo-endereco').hidden = !escolhida || escolhida.kind === 'retirada';
       $('#total').textContent = dinheiro(cartao);
       $('#total-pix').textContent = dinheiro(pix);
       $('#linha-pix').hidden = pix >= cartao;
-      $('#rotulo-total').textContent = pix < cartao ? 'Total no cartão' : 'Total das peças';
+      $('#rotulo-total').textContent = pix < cartao ? 'Total no cartão' : (escolhida ? 'Total' : 'Total das peças');
       if ($('#opcao-pix')) {
         $('#opcao-pix').textContent = 'Pix · ' + dinheiro(pix);
         $('#opcao-cartao').textContent = 'Cartão · ' + dinheiro(cartao);
@@ -318,7 +325,70 @@
           '<button type="button" data-acao="mais" data-n="' + n + '" aria-label="Aumentar quantidade de ' + esc(p.name) + '"' + (i.qty >= Math.min(10, estoque(p, i.color, i.size)) ? ' disabled' : '') + '>+</button></div>' +
           '<button class="botao-icone" type="button" data-acao="remover" data-n="' + n + '" aria-label="Remover ' + esc(p.name) + '">' + icone('i-lixo', true) + '</button></div></li>';
       }).join('');
+      if (frete && frete.pecas !== pecas()) calcularFrete(frete.cep);
       atualizarTotais();
+    }
+    function prazoFrete(opcao) { return opcao.days ? 'até ' + opcao.days + (opcao.days === 1 ? ' dia' : ' dias') : ''; }
+    function desenharFrete() {
+      $('#frete-resultado').innerHTML = '<fieldset class="opcoes opcoes-frete"><legend>Entrega para ' + esc(frete.cidade) + '</legend>' +
+        frete.opcoes.map(function (o, n) {
+          var detalhes = [esc(o.service), o.price_cents ? dinheiro(o.price_cents) : 'Grátis', prazoFrete(o)].filter(Boolean).join(' · ');
+          return '<label><input type="radio" name="frete" value="' + n + '"' + (n === 0 ? ' checked' : '') + '><span>' + detalhes + '</span></label>';
+        }).join('') + '</fieldset>';
+    }
+    function calcularFrete(cep) {
+      var caixa = $('#frete-resultado');
+      var consulta = ++consultaFrete;
+      var quantidade = pecas();
+      frete = null;
+      caixa.innerHTML = '<p class="nota-pequena">Calculando o frete…</p>';
+      atualizarTotais();
+      function falhar(texto, contato) {
+        caixa.innerHTML = '<p class="mensagem mensagem-erro">' + esc(texto) + '</p>' +
+          (contato ? '<a class="botao botao-linha botao-largo" href="' + WHATSAPP + '">' + icone('i-whatsapp') + 'Falar com a loja</a>' : '');
+      }
+      fetch(URL_SUPABASE + '/functions/v1/frete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: CHAVE_PUBLICA },
+        body: JSON.stringify({ cep: cep, items: linhasValidas().map(function (i) { return { product_id: i.id, quantity: i.qty }; }) })
+      }).then(function (r) { return r.json(); }).then(function (dados) {
+        if (consulta !== consultaFrete) return;
+        if (dados.error) { falhar(dados.error, dados.contato); return; }
+        frete = { cep: dados.cep, cidade: dados.city + ' - ' + dados.state, opcoes: dados.options, escolhida: dados.options[0], pecas: quantidade };
+        try { localStorage.setItem('ellize:cep', dados.cep); } catch (e) {}
+        desenharFrete();
+        atualizarTotais();
+      }).catch(function () {
+        if (consulta === consultaFrete) falhar('Não foi possível calcular o frete. Verifique sua conexão e tente novamente.');
+      });
+    }
+    function formatarCep(valor) {
+      var numeros = valor.replace(/\D/g, '').slice(0, 8);
+      return numeros.length > 5 ? numeros.slice(0, 5) + '-' + numeros.slice(5) : numeros;
+    }
+    function ligarFrete() {
+      var form = $('#form-frete');
+      form.cep.addEventListener('input', function () { form.cep.value = formatarCep(form.cep.value); });
+      form.addEventListener('submit', function (evento) {
+        evento.preventDefault();
+        var cep = form.cep.value.replace(/\D/g, '');
+        if (cep.length !== 8) {
+          $('#frete-resultado').innerHTML = '<p class="mensagem mensagem-erro">Informe um CEP com 8 números.</p>';
+          return;
+        }
+        calcularFrete(cep);
+      });
+      $('#frete-resultado').addEventListener('change', function (evento) {
+        if (evento.target.name !== 'frete') return;
+        frete.escolhida = frete.opcoes[+evento.target.value];
+        atualizarTotais();
+      });
+      var salvo = '';
+      try { salvo = localStorage.getItem('ellize:cep') || ''; } catch (e) {}
+      if (salvo.length === 8) {
+        form.cep.value = formatarCep(salvo);
+        calcularFrete(salvo);
+      }
     }
     function desenharFechamento(sessao) {
       var caixa = $('#fechamento');
@@ -335,19 +405,12 @@
         '<fieldset class="opcoes"><legend>Como quer pagar?</legend>' +
         '<label><input type="radio" name="pagamento" value="pix" checked><span id="opcao-pix"></span></label>' +
         '<label><input type="radio" name="pagamento" value="cartao"><span id="opcao-cartao"></span></label></fieldset>' +
-        '<fieldset class="opcoes"><legend>Como quer receber?</legend>' +
-        '<label><input type="radio" name="entrega" value="retirada" checked><span>Retirar na loja</span></label>' +
-        '<label><input type="radio" name="entrega" value="envio"><span>Receber em casa</span></label></fieldset>' +
-        '<label class="campo" id="campo-endereco" hidden>Endereço completo com CEP<textarea name="endereco" rows="3" autocomplete="street-address" maxlength="300"></textarea></label>' +
+        '<label class="campo" id="campo-endereco" hidden>Endereço com número e bairro<textarea name="endereco" rows="3" autocomplete="street-address" maxlength="300"></textarea></label>' +
         '<label class="campo">Observação (opcional)<textarea name="nota" rows="2" maxlength="500"></textarea></label>' +
         '<p class="mensagem mensagem-erro" id="erro-pedido" role="alert" hidden></p>' +
         '<button class="botao botao-vinho botao-largo" type="submit">Fechar pedido</button>' +
-        '<p class="nota-pequena">Ao fechar, você vai para o WhatsApp da loja para combinar o pagamento e o frete.</p></form>';
-      var form = $('#form-pedido');
-      form.addEventListener('change', function () {
-        $('#campo-endereco').hidden = form.entrega.value !== 'envio';
-      });
-      form.addEventListener('submit', enviarPedido);
+        '<p class="nota-pequena">Ao fechar, você vai para o WhatsApp da loja para combinar o pagamento.</p></form>';
+      $('#form-pedido').addEventListener('submit', enviarPedido);
       atualizarTotais();
     }
     function enviarPedido(evento) {
@@ -357,14 +420,21 @@
       var botao = form.querySelector('button[type="submit"]');
       var linhas = linhasValidas();
       erro.hidden = true;
+      var entrega = frete && frete.escolhida;
+      if (!entrega) {
+        erro.textContent = 'Calcule o frete pelo CEP para fechar o pedido.';
+        erro.hidden = false;
+        $('#form-frete').cep.focus();
+        return;
+      }
       ocupado(botao, true, 'Enviando pedido…');
       sb.rpc('create_order', {
         p_items: linhas.map(function (i) { return { product_id: i.id, color: i.color, size: i.size, quantity: i.qty }; }),
         p_name: form.nome.value,
         p_phone: form.telefone.value,
-        p_delivery: form.entrega.value,
         p_payment: form.pagamento.value,
-        p_address: form.endereco.value,
+        p_quote: entrega.id,
+        p_address: entrega.kind === 'retirada' ? null : form.endereco.value,
         p_note: form.nota.value
       }).then(function (resposta) {
         if (resposta.error) {
@@ -376,11 +446,12 @@
         var pedido = resposta.data;
         var texto = 'Olá! Fiz o pedido #' + pedido.number + ' no site da Ellize Collection.\n\n' +
           linhas.map(function (i) { return i.qty + 'x ' + produtos[i.id].name + ' (' + (i.color !== 'Única' ? i.color + ', ' : '') + i.size + ')'; }).join('\n') +
-          '\n\nTotal: ' + dinheiro(pedido.total_cents) + '\nPagamento: ' + (form.pagamento.value === 'pix' ? 'Pix' : 'Cartão') + '\nEntrega: ' + (form.entrega.value === 'envio' ? 'Receber em casa' : 'Retirar na loja');
+          '\n\nTotal: ' + dinheiro(pedido.total_cents) + '\nPagamento: ' + (form.pagamento.value === 'pix' ? 'Pix' : 'Cartão') + '\nEntrega: ' + entrega.service +
+          (entrega.kind === 'retirada' ? '' : '\nFrete: ' + dinheiro(entrega.price_cents) + (entrega.days ? ' (' + prazoFrete(entrega) + ')' : '') + '\nEndereço: ' + form.endereco.value.trim() + ', CEP ' + formatarCep(frete.cep));
         var linkPedido = WHATSAPP + '?text=' + encodeURIComponent(texto);
         carrinho.salvar([]);
         alvo.innerHTML = '<div class="estado estado-sucesso"><span class="etiqueta">Pedido #' + esc(pedido.number) + '</span>' +
-          '<h2>Pedido recebido</h2><p>Total de ' + dinheiro(pedido.total_cents) + '. Abrindo o WhatsApp para você combinar o pagamento e o frete. Se não abrir, use o botão abaixo.</p>' +
+          '<h2>Pedido recebido</h2><p>Total de ' + dinheiro(pedido.total_cents) + '. Abrindo o WhatsApp para você combinar o pagamento. Se não abrir, use o botão abaixo.</p>' +
           '<a class="botao botao-vinho" href="' + linkPedido + '">' + icone('i-whatsapp') + 'Enviar no WhatsApp</a>' +
           '<a class="botao botao-linha" href="conta.html">Ver meus pedidos</a></div>';
         window.scrollTo(0, 0);
@@ -401,11 +472,17 @@
       if (JSON.stringify(validas) !== JSON.stringify(carrinho.ler())) carrinho.salvar(validas);
       if (!validas.length) { desenharVazio(); return; }
       alvo.innerHTML = '<ul class="linhas" id="itens"></ul><aside class="resumo">' +
+        '<form id="form-frete" novalidate><label class="campo">Calcule o frete pelo CEP<span class="frete-linha">' +
+        '<input name="cep" inputmode="numeric" autocomplete="postal-code" maxlength="9" placeholder="00000-000">' +
+        '<button class="botao botao-linha" type="submit">Calcular</button></span></label></form>' +
+        '<div id="frete-resultado" aria-live="polite"></div>' +
+        '<p class="resumo-total" id="linha-frete" hidden><span>Frete</span><strong id="valor-frete"></strong></p>' +
         '<p class="resumo-total"><span id="rotulo-total">Total das peças</span><strong id="total"></strong></p>' +
         '<p class="resumo-total" id="linha-pix" hidden><span>Total no Pix</span><strong id="total-pix"></strong></p>' +
-        '<p class="nota-pequena">Frete combinado com a loja.</p><div id="fechamento"></div></aside>';
+        '<div id="fechamento"></div></aside>';
       desenharLinhas();
       desenharFechamento(r[1].data.session);
+      ligarFrete();
       document.addEventListener('ellize:sacola', function () { if ($('#itens')) desenharLinhas(); });
       $('#itens').addEventListener('click', function (evento) {
         var botao = evento.target.closest('[data-acao]');
@@ -550,7 +627,7 @@
       $('#sair').addEventListener('click', function () {
         sb.auth.signOut().then(function () { desenharAcesso('entrar'); });
       });
-      sb.from('orders').select('number,total_cents,status,delivery,payment_choice,created_at,order_items(product_name,color,size,quantity)')
+      sb.from('orders').select('number,total_cents,status,delivery,shipping_service,payment_choice,created_at,order_items(product_name,color,size,quantity)')
         .order('created_at', { ascending: false }).then(function (r) {
           var caixa = $('#pedidos');
           if (!caixa) return;
@@ -563,7 +640,7 @@
           caixa.innerHTML = '<ul class="pedidos">' + r.data.map(function (o) {
             return '<li class="pedido"><div class="pedido-topo"><strong>Pedido #' + esc(o.number) + '</strong>' +
               '<span class="pedido-status">' + esc(STATUS[o.status] || o.status) + '</span></div>' +
-              '<p>' + new Date(o.created_at).toLocaleDateString('pt-BR') + ' · ' + dinheiro(o.total_cents) + ' · ' + (o.payment_choice === 'pix' ? 'Pix' : 'Cartão') + ' · ' + (o.delivery === 'envio' ? 'Receber em casa' : 'Retirar na loja') + '</p>' +
+              '<p>' + new Date(o.created_at).toLocaleDateString('pt-BR') + ' · ' + dinheiro(o.total_cents) + ' · ' + (o.payment_choice === 'pix' ? 'Pix' : 'Cartão') + ' · ' + (o.delivery === 'retirada' ? 'Retirar na loja' : esc(o.shipping_service || 'Receber em casa')) + '</p>' +
               '<ul>' + o.order_items.map(function (i) {
                 return '<li>' + i.quantity + 'x ' + esc(i.product_name) + ' (' + (i.color !== 'Única' ? esc(i.color) + ', ' : '') + esc(i.size) + ')</li>';
               }).join('') + '</ul></li>';
