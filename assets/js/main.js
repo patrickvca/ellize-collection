@@ -440,9 +440,13 @@
     var cats = dados[0];
     var pecas = dados[1];
     if (!cats.length) return;
-    desenharDestaques(cats, pecas);
     var DEPARTAMENTOS = ['feminino', 'masculino'];
     var outras = cats.filter(function (c) { return DEPARTAMENTOS.indexOf(c.slug) === -1; });
+    desenharDestaques(outras, pecas);
+    cats.forEach(function (c) {
+      var capa = c.image && document.querySelector('.colecoes-grade a[href="loja.html?c=' + c.slug + '"] img');
+      if (capa) capa.src = c.image;
+    });
     trocarLinks('Categorias', linkCategoria('Ver todas') + linkCategoria('Promoções', 'promocao') +
       cats.map(function (c) { return linkCategoria(c.name, c.slug); }).join(''));
     DEPARTAMENTOS.forEach(function (slug) {

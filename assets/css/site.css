@@ -193,7 +193,7 @@ section[id] { scroll-margin-top: calc(var(--header-h) + 24px); }
 .painel-claro::after { background: linear-gradient(to top, rgb(247 245 239 / 0.86), rgb(247 245 239 / 0) 58%); }
 
 .destaques { padding-top: 0; }
-.destaques-grade { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.destaques-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
 
 /* A marca */
 .marca-secao { background: var(--marfim); }
