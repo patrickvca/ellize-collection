@@ -261,7 +261,7 @@
           '<span style="background:' + corHex(c) + '"></span></label>';
       }).join('') + '</fieldset><p class="campo-erro" id="erro-cor" role="alert" hidden>Selecione uma cor.</p>' : '';
       alvo.innerHTML =
-        '<div class="detalhe-foto"><img id="foto-produto" src="' + esc(corAtual ? fotoCor(p, corAtual) : p.image) + '" alt="" width="800" height="1000">' + selo(p) + '</div>' +
+        '<div class="detalhe-midia"><div class="detalhe-foto" id="galeria-palco"></div><div class="galeria-miniaturas" id="galeria-miniaturas"></div></div>' +
         '<form class="detalhe-info" id="form-produto" novalidate>' +
         '<h1>' + esc(p.name) + '</h1>' +
         '<p class="detalhe-preco">' + precoHTML(p) + '</p>' +
@@ -315,11 +315,58 @@
         if (evento.key === 'Enter') { evento.preventDefault(); calcularNoProduto(); }
       });
       $('#calcular-produto').addEventListener('click', calcularNoProduto);
+      /* Galeria: vídeos primeiro, depois as fotos da cor escolhida */
+      var midias = [];
+      var atual = 0;
+      function montarGaleria(cor, comecarNaFoto) {
+        var achada = cor ? cores(p).filter(function (c) { return c.name === cor; })[0] : null;
+        var fotos = p.images && p.images.length ? p.images
+          : achada ? (achada.images && achada.images.length ? achada.images : (achada.image ? [achada.image] : [])) : [];
+        if (!fotos.length) fotos = [p.image];
+        var videos = (p.videos || []).map(function (url) { return { tipo: 'video', url: url }; });
+        midias = videos.concat(fotos.map(function (url) { return { tipo: 'foto', url: url }; }));
+        $('#galeria-miniaturas').innerHTML = midias.length > 1 ? midias.map(function (m, i) {
+          return '<button type="button" class="miniatura' + (m.tipo === 'video' ? ' miniatura-video' : '') + '" data-midia="' + i + '" aria-label="' +
+            (m.tipo === 'video' ? 'Ver vídeo ' + (i + 1) : 'Ver foto ' + (i - videos.length + 1)) + '">' +
+            (m.tipo === 'video' ? '<video src="' + esc(m.url) + '#t=0.5" muted playsinline preload="metadata"></video>' : '<img src="' + esc(m.url) + '" alt="" width="80" height="100" loading="lazy">') + '</button>';
+        }).join('') : '';
+        mostrar(comecarNaFoto ? videos.length : 0);
+      }
+      function mostrar(indice) {
+        atual = (indice + midias.length) % midias.length;
+        var m = midias[atual];
+        $('#galeria-palco').innerHTML = (m.tipo === 'video'
+          ? '<video src="' + esc(m.url) + '" controls muted autoplay loop playsinline preload="metadata"></video>'
+          : '<img src="' + esc(m.url) + '" alt="' + esc(p.name) + '" width="800" height="1000">') +
+          selo(p) +
+          (midias.length > 1 ? '<button type="button" class="galeria-seta galeria-anterior" data-passo="-1" aria-label="Anterior">‹</button>' +
+            '<button type="button" class="galeria-seta galeria-proxima" data-passo="1" aria-label="Próxima">›</button>' : '');
+        document.querySelectorAll('#galeria-miniaturas [data-midia]').forEach(function (b) {
+          b.setAttribute('aria-current', String(+b.dataset.midia === atual));
+        });
+      }
+      $('#galeria-palco').addEventListener('click', function (evento) {
+        var seta = evento.target.closest('[data-passo]');
+        if (seta) mostrar(atual + Number(seta.dataset.passo));
+      });
+      $('#galeria-miniaturas').addEventListener('click', function (evento) {
+        var botao = evento.target.closest('[data-midia]');
+        if (botao) mostrar(+botao.dataset.midia);
+      });
+      var toqueX = null;
+      $('#galeria-palco').addEventListener('touchstart', function (evento) { toqueX = evento.touches[0].clientX; }, { passive: true });
+      $('#galeria-palco').addEventListener('touchend', function (evento) {
+        if (toqueX === null || evento.target.closest('video')) { toqueX = null; return; }
+        var distancia = evento.changedTouches[0].clientX - toqueX;
+        toqueX = null;
+        if (Math.abs(distancia) > 40 && midias.length > 1) mostrar(atual + (distancia < 0 ? 1 : -1));
+      });
+      montarGaleria(corAtual, false);
       $('#form-produto').addEventListener('change', function (evento) {
         if (evento.target.name !== 'cor') return;
         var marcado = this.querySelector('input[name="tamanho"]:checked');
         $('#cor-nome').textContent = ': ' + evento.target.value;
-        $('#foto-produto').src = fotoCor(p, evento.target.value);
+        montarGaleria(evento.target.value, true);
         $('#erro-cor').hidden = true;
         $('#tamanhos-produto').innerHTML = htmlTamanhos(evento.target.value, marcado && marcado.value);
       });

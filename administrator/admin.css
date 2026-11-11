@@ -230,3 +230,25 @@ body.arrastando-categoria, body.arrastando-categoria * { cursor: grabbing !impor
   .categoria-ordem .seta-saltou-cima { animation: seta-salto-cima 0.35s ease-out; }
   .categoria-ordem .seta-saltou-baixo { animation: seta-salto-baixo 0.35s ease-out; }
 }
+.c-foto em { position: absolute; right: 1px; bottom: 1px; padding: 0 0.25rem; border-radius: var(--raio-pill); background: var(--vinho); color: var(--creme); font-size: 0.6875rem; font-style: normal; line-height: 1.4; }
+.fotos-cores { display: grid; gap: 0.75rem; margin-top: 0.75rem; }
+.fotos-cor strong { display: block; margin-bottom: 0.375rem; font-size: 0.875rem; }
+.fotos-lista { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.foto-item { position: relative; display: grid; gap: 0.25rem; width: 64px; margin: 0; }
+.foto-item img { width: 64px; height: 80px; border-radius: var(--raio-s); object-fit: cover; object-position: 50% 35%; background: var(--marfim); }
+.foto-tirar { position: absolute; top: 2px; right: 2px; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; background: rgb(36 26 26 / 0.75); color: #fff; font-size: 0.9375rem; line-height: 1; cursor: pointer; }
+.foto-principal, .foto-tornar { padding: 0; border: 0; background: none; color: var(--tinta-suave); font: inherit; font-size: 0.6875rem; line-height: 1.2; text-align: center; }
+.foto-principal { color: var(--vinho); font-weight: 600; }
+.foto-tornar { color: var(--vinho); text-decoration: underline; cursor: pointer; }
+.fotos-mais { position: relative; display: grid; place-items: center; width: 64px; height: 80px; border: 1px dashed #a89f93; border-radius: var(--raio-s); color: var(--tinta-suave); font-size: 0.75rem; cursor: pointer; }
+.fotos-mais:hover, .fotos-mais:focus-within { border-color: var(--vinho); color: var(--vinho); }
+.fotos-mais input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
+.videos-campo { display: grid; gap: 0.5rem; padding: 0.875rem; border: 1px dashed #a89f93; border-radius: var(--raio-m); }
+.videos-lista { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.videos-lista:empty { display: none; }
+.video-item { position: relative; width: 96px; }
+.video-item video { width: 96px; height: 120px; border-radius: var(--raio-s); object-fit: cover; background: var(--tinta); }
+.videos-campo .foto-botao { justify-self: start; }
+.fotos-modo { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.25rem; margin-top: 0.875rem; font-size: 0.875rem; }
+.fotos-modo span { font-weight: 600; }
+.fotos-modo label { display: flex; align-items: center; gap: 0.375rem; cursor: pointer; }

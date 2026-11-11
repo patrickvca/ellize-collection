@@ -20,6 +20,12 @@
   var FOTO_PROPORCAO = 4 / 5;
   var FOTO_FOCO_Y = 0.35;
   var FOTO_MAX_BYTES = 20 * 1024 * 1024;
+  var VIDEO_MAX_BYTES = 50 * 1024 * 1024;
+  var VIDEO_TIPOS = { 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov' };
+  var VIDEOS_MAX = 3;
+  var videos = [];
+  var fotosGerais = [];
+  var modoFotos = 'geral';
   var tempoAviso;
 
   function $(seletor) { return document.querySelector(seletor); }
@@ -201,13 +207,17 @@
     var nome = nomeDaFoto(url);
     return nome ? sb.storage.from(BUCKET).remove([nome]) : Promise.resolve();
   }
+  function fotosDaCor(c) { return c.images && c.images.length ? c.images : (c.image ? [c.image] : []); }
+  function arquivosDoProduto(p) {
+    var lista = [p.image].concat(p.videos || [], p.images || []);
+    (p.colors || []).forEach(function (c) { lista = lista.concat(fotosDaCor(c)); });
+    return lista.filter(function (u, i) { return u && lista.indexOf(u) === i; });
+  }
   function removerProduto(p) {
     if (!window.confirm('Remover "' + p.name + '" da loja? Os pedidos antigos continuam guardados.')) return;
     sb.from('products').delete().eq('id', p.id).then(function (r) {
       if (r.error) { avisar('Não foi possível remover o produto.'); return; }
-      (p.colors || []).map(function (c) { return c.image; }).concat(p.image).forEach(function (foto) {
-        if (foto) removerFoto(foto);
-      });
+      arquivosDoProduto(p).forEach(function (arquivo) { removerFoto(arquivo); });
       avisar('Produto removido.');
       carregarProdutos();
     });
@@ -493,10 +503,12 @@
       return '<th><button class="grade-tirar" type="button" data-tirar-tamanho="' + ti + '" aria-label="Remover tamanho ' + esc(t) + '">remover</button>' +
         '<input class="t-nome" maxlength="12" value="' + esc(t) + '" aria-label="Nome do tamanho"></th>';
     }).join('') + '<th></th></tr></thead><tbody>' + grade.cores.map(function (c, ci) {
-      var previa = c.previa || (c.image ? fotoSrc(c.image) : '');
-      return '<tr><td><div class="grade-cor"><label class="c-foto" title="Foto desta cor">' +
+      var primeira = c.fotos[0];
+      var previa = primeira ? (primeira.previa || fotoSrc(primeira.url)) : '';
+      return '<tr><td><div class="grade-cor">' + (modoFotos === 'cor' ? '<label class="c-foto" title="Adicionar fotos desta cor">' +
         (previa ? '<img src="' + esc(previa) + '" alt="" width="42" height="42">' : '<span>Foto</span>') +
-        '<input type="file" accept="image/jpeg,image/png,image/webp" data-foto-cor="' + ci + '" aria-label="Foto da cor ' + esc(c.name) + '"></label>' +
+        (c.fotos.length > 1 ? '<em>' + c.fotos.length + '</em>' : '') +
+        '<input type="file" accept="image/jpeg,image/png,image/webp" multiple data-foto-cor="' + ci + '" aria-label="Adicionar fotos da cor ' + esc(c.name) + '"></label>' : '') +
         '<button class="c-amostra" type="button" data-paleta="' + ci + '" style="background:' + (/^#[0-9a-f]{6}$/i.test(c.hex || '') ? c.hex : COR_PADRAO) + '" aria-label="Escolher cor">' +
         '</button>' +
         '<input class="c-nome" maxlength="30" value="' + esc(c.name) + '" placeholder="Nome da cor" aria-label="Nome da cor"></div></td>' +
@@ -505,6 +517,96 @@
         }).join('') +
         '<td><button class="fechar" type="button" data-tirar-cor="' + ci + '" aria-label="Remover cor ' + esc(c.name) + '">×</button></td></tr>';
     }).join('') + '</tbody></table>';
+    desenharFotosCores();
+  }
+  /* Fotos da galeria: as mesmas para todas as cores (fotosGerais) ou uma lista por cor */
+  function listaDeFotos(chave) { return chave === 'g' ? fotosGerais : grade.cores[+chave].fotos; }
+  function blocoFotos(titulo, fotos, chave, nomeCor) {
+    return '<div class="fotos-cor"><strong>' + titulo + '</strong><div class="fotos-lista">' +
+      fotos.map(function (f, fi) {
+        return '<figure class="foto-item"><img src="' + esc(f.previa || fotoSrc(f.url)) + '" alt="" width="64" height="80">' +
+          '<button class="foto-tirar" type="button" data-tirar-foto="' + chave + ':' + fi + '" aria-label="Remover foto ' + (fi + 1) + nomeCor + '">×</button>' +
+          (fi === 0 ? '<span class="foto-principal">Primeira</span>'
+            : '<button class="foto-tornar" type="button" data-principal="' + chave + ':' + fi + '">Tornar primeira</button>') + '</figure>';
+      }).join('') +
+      '<label class="fotos-mais" title="Adicionar fotos"><input type="file" accept="image/jpeg,image/png,image/webp" multiple data-foto-cor="' + chave + '" aria-label="Adicionar fotos' + nomeCor + '"><span>+ Fotos</span></label>' +
+      '</div></div>';
+  }
+  function desenharFotosCores() {
+    form.modoFotos.value = modoFotos;
+    $('#fotos-cores').innerHTML = modoFotos === 'geral'
+      ? blocoFotos('Fotos do produto, para todas as cores', fotosGerais, 'g', ' do produto')
+      : grade.cores.map(function (c, ci) {
+        return blocoFotos('Fotos da cor ' + esc(c.name || 'sem nome'), c.fotos, ci, ' da cor ' + esc(c.name));
+      }).join('');
+  }
+  function adicionarFotosCor(chave, arquivos) {
+    var validos = [].filter.call(arquivos, fotoValida);
+    if (!validos.length) return;
+    lerGrade();
+    validos.forEach(function (arquivo) {
+      listaDeFotos(String(chave)).push({ arquivo: arquivo, previa: URL.createObjectURL(arquivo) });
+    });
+    desenharGrade();
+  }
+  $('#fotos-cores').addEventListener('change', function (evento) {
+    var campo = evento.target.closest('[data-foto-cor]');
+    if (campo) adicionarFotosCor(campo.dataset.fotoCor, campo.files);
+  });
+  $('#fotos-cores').addEventListener('click', function (evento) {
+    var tirar = evento.target.closest('[data-tirar-foto]');
+    var principal = evento.target.closest('[data-principal]');
+    if (!tirar && !principal) return;
+    lerGrade();
+    var partes = (tirar || principal).dataset[tirar ? 'tirarFoto' : 'principal'].split(':');
+    var fotos = listaDeFotos(partes[0]);
+    var foto = fotos.splice(+partes[1], 1)[0];
+    if (principal) fotos.unshift(foto);
+    desenharGrade();
+  });
+  form.addEventListener('change', function (evento) {
+    if (evento.target.name !== 'modoFotos') return;
+    lerGrade();
+    modoFotos = evento.target.value;
+    desenharGrade();
+  });
+  function desenharVideos() {
+    $('#videos-lista').innerHTML = videos.map(function (v, i) {
+      return '<div class="video-item"><video src="' + esc(v.previa || v.url) + '" muted playsinline preload="metadata"></video>' +
+        '<button class="foto-tirar" type="button" data-tirar-video="' + i + '" aria-label="Remover vídeo ' + (i + 1) + '">×</button></div>';
+    }).join('');
+  }
+  function videoValido(arquivo) {
+    var ok = !!VIDEO_TIPOS[arquivo.type] && arquivo.size <= VIDEO_MAX_BYTES;
+    var erro = $('#foto-erro');
+    erro.textContent = 'Use um vídeo MP4 ou WebM de até 50 MB.';
+    erro.hidden = ok;
+    return ok;
+  }
+  $('#video').addEventListener('change', function () {
+    var arquivos = [].filter.call(this.files, videoValido);
+    this.value = '';
+    var espaco = VIDEOS_MAX - videos.length;
+    if (arquivos.length > espaco) {
+      $('#foto-erro').textContent = 'O produto pode ter até ' + VIDEOS_MAX + ' vídeos.';
+      $('#foto-erro').hidden = false;
+      arquivos = arquivos.slice(0, Math.max(espaco, 0));
+    }
+    arquivos.forEach(function (arquivo) { videos.push({ arquivo: arquivo, previa: URL.createObjectURL(arquivo) }); });
+    desenharVideos();
+  });
+  $('#videos-lista').addEventListener('click', function (evento) {
+    var tirar = evento.target.closest('[data-tirar-video]');
+    if (!tirar) return;
+    videos.splice(+tirar.dataset.tirarVideo, 1);
+    desenharVideos();
+  });
+  function enviarVideo(arquivo) {
+    var nome = crypto.randomUUID() + '.' + VIDEO_TIPOS[arquivo.type];
+    return sb.storage.from(BUCKET).upload(nome, arquivo, { contentType: arquivo.type }).then(function (r) {
+      if (r.error) throw r.error;
+      return sb.storage.from(BUCKET).getPublicUrl(nome).data.publicUrl;
+    });
   }
   $('#paleta-opcoes').innerHTML = PALETA.map(function (c, i) {
     return '<button type="button" data-cor-paleta="' + i + '"><i style="background:' + c[1] + '"></i>' + c[0] + '</button>';
@@ -547,12 +649,7 @@
   }
   $('#grade').addEventListener('change', function (evento) {
     var campo = evento.target.closest('[data-foto-cor]');
-    if (!campo || !campo.files[0] || !fotoValida(campo.files[0])) return;
-    lerGrade();
-    var cor = grade.cores[+campo.dataset.fotoCor];
-    cor.arquivo = campo.files[0];
-    cor.previa = URL.createObjectURL(cor.arquivo);
-    desenharGrade();
+    if (campo) adicionarFotosCor(+campo.dataset.fotoCor, campo.files);
   });
   $('#grade').addEventListener('click', function (evento) {
     var amostra = evento.target.closest('[data-paleta]');
@@ -577,7 +674,7 @@
     if (botao) { adicionarTamanho(botao.dataset.atalho); return; }
     if (evento.target.closest('[data-nova-cor]')) {
       lerGrade();
-      grade.cores.push({ name: '', hex: COR_PADRAO });
+      grade.cores.push({ name: '', hex: COR_PADRAO, fotos: [] });
       grade.q.push(grade.tamanhos.map(function () { return 0; }));
       desenharGrade();
       abrirPaleta(grade.cores.length - 1);
@@ -605,13 +702,19 @@
       form.promoPix.value = p.promo_pix_price_cents ? paraTexto(p.promo_pix_price_cents) : '';
       form.ativo.checked = p.active;
       grade = {
-        cores: p.colors.map(function (c) { return { name: c.name, hex: c.hex || COR_PADRAO, image: c.image || null }; }),
+        cores: p.colors.map(function (c) {
+          return { name: c.name, hex: c.hex || COR_PADRAO, fotos: fotosDaCor(c).map(function (url) { return { url: url }; }) };
+        }),
         tamanhos: p.sizes.slice(),
         q: p.colors.map(function (c) { return p.sizes.map(function (t) { return qtd(p, c.name, t); }); })
       };
     } else {
-      grade = { cores: [{ name: 'Única', hex: COR_PADRAO }], tamanhos: ['P', 'M', 'G'], q: [[0, 0, 0]] };
+      grade = { cores: [{ name: 'Única', hex: COR_PADRAO, fotos: [] }], tamanhos: ['P', 'M', 'G'], q: [[0, 0, 0]] };
     }
+    videos = (p && p.videos ? p.videos : []).map(function (url) { return { url: url }; });
+    fotosGerais = (p && p.images ? p.images : []).map(function (url) { return { url: url }; });
+    modoFotos = !fotosGerais.length && grade.cores.some(function (c) { return c.fotos.length; }) ? 'cor' : 'geral';
+    desenharVideos();
     desenharGrade();
     fecharPaleta();
     editor.showModal();
@@ -728,7 +831,7 @@
       pix_price_cents: pix,
       promo_pix_price_cents: promoPix,
       sizes: tamanhos,
-      colors: grade.cores.map(function (c, i) { return { name: nomesCor[i], hex: c.hex, image: c.image || null }; }),
+      colors: grade.cores.map(function (c, i) { return { name: nomesCor[i], hex: c.hex }; }),
       stock: estoque,
       tags: [].map.call(form.querySelectorAll('[name="categoria"]:checked'), function (c) { return c.value; }),
       active: form.ativo.checked
@@ -745,12 +848,23 @@
       erro.hidden = false;
       return;
     }
-    ocupado(botao, true, 'Salvando…');
+    ocupado(botao, true, videos.some(function (v) { return v.arquivo; }) ? 'Enviando vídeos…' : 'Salvando…');
     var antigo = editando;
-    var envios = [enviarFoto(fotoNova)].concat(grade.cores.map(function (c) { return enviarFoto(c.arquivo); }));
-    Promise.all(envios).then(function (urls) {
-      var url = urls[0];
-      dados.colors.forEach(function (c, i) { if (urls[i + 1]) c.image = urls[i + 1]; });
+    function enviarLista(fotos) {
+      return Promise.all(fotos.map(function (f) { return f.url ? Promise.resolve(f.url) : enviarFoto(f.arquivo); }));
+    }
+    var porCor = modoFotos === 'cor';
+    var envioFotosCores = Promise.all(grade.cores.map(function (c) { return porCor ? enviarLista(c.fotos) : Promise.resolve([]); }));
+    var envioFotosGerais = porCor ? Promise.resolve([]) : enviarLista(fotosGerais);
+    var envioVideos = Promise.all(videos.map(function (v) { return v.url ? Promise.resolve(v.url) : enviarVideo(v.arquivo); }));
+    Promise.all([enviarFoto(fotoNova), envioFotosCores, envioVideos, envioFotosGerais]).then(function (envios) {
+      var url = envios[0];
+      dados.colors.forEach(function (c, i) {
+        c.images = envios[1][i];
+        c.image = c.images[0] || null;
+      });
+      dados.videos = envios[2];
+      dados.images = envios[3];
       var primeiraCor = dados.colors.filter(function (c) { return c.image; })[0];
       dados.image = url || (antigo ? antigo.image : (primeiraCor ? primeiraCor.image : FOTO_PADRAO));
       if (antigo) return sb.from('products').update(dados).eq('id', antigo.id).select().then(function (r) { return [r, url]; });
@@ -765,9 +879,9 @@
         return;
       }
       if (antigo) {
-        var emUso = dados.colors.map(function (c) { return c.image; }).concat(dados.image);
-        (antigo.colors || []).map(function (c) { return c.image; }).concat(antigo.image).forEach(function (foto) {
-          if (foto && emUso.indexOf(foto) === -1) removerFoto(foto);
+        var emUso = arquivosDoProduto(dados);
+        arquivosDoProduto(antigo).forEach(function (arquivo) {
+          if (emUso.indexOf(arquivo) === -1) removerFoto(arquivo);
         });
       }
       editor.close();
@@ -775,7 +889,7 @@
       carregarProdutos();
     }).catch(function () {
       ocupado(botao, false);
-      erro.textContent = 'Não foi possível enviar a foto. Use JPG, PNG ou WebP.';
+      erro.textContent = 'Não foi possível enviar as fotos ou os vídeos. Confira o formato e o tamanho e tente de novo.';
       erro.hidden = false;
     });
   });

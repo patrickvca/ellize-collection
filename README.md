@@ -29,7 +29,7 @@ Depois abra http://localhost:4173.
 
 ## Fotos dos produtos
 
-No painel, as fotos são cortadas na proporção 4:5 e salvas com até 1200 × 1500 px.
+No painel, as fotos são cortadas na proporção 4:5 e salvas com até 1200 × 1500 px. A galeria pode ter as mesmas fotos para todas as cores (`images`) ou fotos diferentes por cor (`colors[].images`, com a primeira em `colors[].image`). O produto pode ter até 3 vídeos MP4 ou WebM de até 50 MB (`videos`), que aparecem antes das fotos na página do produto. A foto principal continua sendo a capa usada nos cards da loja.
 
 ## Trocar as texturas por fotos
 

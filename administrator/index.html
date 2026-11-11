@@ -7,8 +7,8 @@
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#2c070a">
   <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="../assets/css/tokens.css?v=20261111d">
-  <link rel="stylesheet" href="admin.css?v=20261111d">
+  <link rel="stylesheet" href="../assets/css/tokens.css?v=20261111f">
+  <link rel="stylesheet" href="admin.css?v=20261111f">
 </head>
 <body>
   <main class="login" id="tela-login" hidden>
@@ -136,6 +136,15 @@
           </div>
         </div>
         <p class="mensagem mensagem-erro" id="foto-erro" role="alert" hidden></p>
+        <div class="videos-campo">
+          <strong>Vídeos</strong>
+          <p class="foto-dica">MP4 ou WebM de até 50 MB, até 3 vídeos. Eles aparecem antes das fotos na página do produto. A foto principal continua sendo a capa na loja.</p>
+          <div class="videos-lista" id="videos-lista"></div>
+          <label class="foto-botao">
+            <input id="video" type="file" accept="video/mp4,video/webm,video/quicktime" multiple>
+            <span>Adicionar vídeo</span>
+          </label>
+        </div>
         <label class="campo">Nome<input name="nome" required maxlength="120"></label>
         <label class="campo">Descrição<textarea name="descricao" rows="3" maxlength="2000"></textarea></label>
         <div class="duas">
@@ -154,8 +163,14 @@
         </fieldset>
         <fieldset class="grupo">
           <legend>Estoque por cor e tamanho</legend>
-          <p class="dica">Para peça sem variação de cor, mantenha a linha "Única". Clique na bolinha para escolher a cor. Se precisar de outro nome, como "Azul royal", digite no campo ao lado. A foto de cada cor aparece na loja quando o cliente a seleciona.</p>
+          <p class="dica">Para peça sem variação de cor, mantenha a linha "Única". Clique na bolinha para escolher a cor. Se precisar de outro nome, como "Azul royal", digite no campo ao lado. As fotos de cada cor aparecem na loja quando o cliente a seleciona. A primeira é a principal da cor.</p>
           <div class="grade-rolagem" id="grade"></div>
+          <div class="fotos-modo" role="radiogroup" aria-label="Fotos da galeria">
+            <span>Fotos da galeria</span>
+            <label><input type="radio" name="modoFotos" value="geral"> As mesmas para todas as cores</label>
+            <label><input type="radio" name="modoFotos" value="cor"> Diferentes para cada cor</label>
+          </div>
+          <div class="fotos-cores" id="fotos-cores"></div>
           <div class="paleta" id="paleta" hidden>
             <div class="paleta-topo"><span>Escolha a cor</span><button class="botao-texto" type="button" data-fechar-paleta>Fechar</button></div>
             <div class="paleta-opcoes" id="paleta-opcoes"></div>
@@ -213,6 +228,6 @@
   <div class="aviso" id="aviso" role="status" hidden></div>
 
   <script src="../assets/vendor/supabase-2.119.0.js" defer></script>
-  <script src="admin.js?v=20261111d" defer></script>
+  <script src="admin.js?v=20261111f" defer></script>
 </body>
 </html>
