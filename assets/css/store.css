@@ -89,7 +89,12 @@
 .frete-produto { display: grid; gap: 0.5rem; }
 .enderecos-escolha { margin-bottom: 0.75rem; }
 .enderecos-escolha span { justify-items: start; padding-block: 0.625rem; text-align: left; line-height: 1.35; }
-.titulo-enderecos { margin-top: 2.5rem; }
+.conta-abas { display: flex; gap: 0.25rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--linha); }
+.conta-abas button { margin-bottom: -1px; padding: 0.75rem 1rem; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--tinta-suave); font-family: var(--serif); font-size: clamp(1.125rem, 1rem + 0.6vw, 1.5rem); cursor: pointer; }
+.conta-abas button:hover { color: var(--vinho); }
+.conta-abas button[aria-selected="true"] { border-bottom-color: var(--vinho); color: var(--vinho); }
+.conta-abas button:focus-visible { outline: 2px solid var(--vinho); outline-offset: -2px; }
+.conta-abas + section[hidden], #aba-enderecos[hidden], #aba-compras[hidden] { display: none; }
 .enderecos-lista { display: grid; gap: 0.75rem; margin: 0 0 1rem; padding: 0; list-style: none; }
 .endereco-card { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.75rem 1.5rem; padding: 1rem 1.25rem; border: 1px solid var(--linha); border-radius: var(--raio-s); background: var(--marfim); }
 .endereco-card.padrao { border-color: var(--vinho); }

@@ -782,8 +782,12 @@
       alvo.innerHTML = '<div class="painel-conta"><div class="conta-topo"><div><span class="etiqueta">Minha conta</span>' +
         '<h1>Olá' + (meta.full_name ? ', ' + esc(meta.full_name.split(' ')[0]) : '') + '</h1><p>' + esc(sessao.user.email) + '</p></div>' +
         '<button class="botao botao-linha" id="sair" type="button">Sair</button></div>' +
-        '<h2>Minhas compras</h2><div id="saldo-credito"></div><div id="pedidos" aria-busy="true"><p>Carregando compras…</p></div>' +
-        '<h2 class="titulo-enderecos">Meus endereços</h2><div id="enderecos"><p>Carregando endereços…</p></div></div>';
+        '<div class="conta-abas" role="tablist" aria-label="Minha conta">' +
+        '<button type="button" role="tab" id="tab-compras" aria-controls="aba-compras" data-aba-conta="compras">Minhas compras</button>' +
+        '<button type="button" role="tab" id="tab-enderecos" aria-controls="aba-enderecos" data-aba-conta="enderecos">Meus endereços</button></div>' +
+        '<section id="aba-compras" role="tabpanel" aria-labelledby="tab-compras"><div id="saldo-credito"></div><div id="pedidos" aria-busy="true"><p>Carregando compras…</p></div></section>' +
+        '<section id="aba-enderecos" role="tabpanel" aria-labelledby="tab-enderecos"><div id="enderecos"><p>Carregando endereços…</p></div></section></div>';
+      mostrarAbaConta(location.hash === '#enderecos' ? 'enderecos' : 'compras');
       carregarEnderecos();
       $('#sair').addEventListener('click', function () {
         sb.auth.signOut().then(function () { desenharAcesso('entrar'); });
@@ -844,6 +848,15 @@
         });
     }
 
+    function mostrarAbaConta(aba) {
+      ['compras', 'enderecos'].forEach(function (nome) {
+        var ativa = nome === aba;
+        $('#tab-' + nome).setAttribute('aria-selected', String(ativa));
+        $('#tab-' + nome).tabIndex = ativa ? 0 : -1;
+        $('#aba-' + nome).hidden = !ativa;
+      });
+      try { history.replaceState(null, '', location.pathname + location.search + (aba === 'enderecos' ? '#enderecos' : '')); } catch (e) {}
+    }
     var meusEnderecos = [];
     function carregarEnderecos() {
       sb.from('customer_addresses').select('*').order('is_default', { ascending: false }).order('created_at').then(function (r) {
@@ -948,7 +961,16 @@
       }
     }
     alvo.addEventListener('click', function (evento) {
+      var aba = evento.target.closest('[data-aba-conta]');
+      if (aba) { mostrarAbaConta(aba.dataset.abaConta); return; }
       if (evento.target.closest('#enderecos')) cuidarEnderecos(evento);
+    });
+    alvo.addEventListener('keydown', function (evento) {
+      var aba = evento.target.closest('[data-aba-conta]');
+      if (!aba || (evento.key !== 'ArrowRight' && evento.key !== 'ArrowLeft')) return;
+      var outra = aba.dataset.abaConta === 'compras' ? 'enderecos' : 'compras';
+      mostrarAbaConta(outra);
+      $('#tab-' + outra).focus();
     });
 
     function dataCurta(valor) { return new Date(valor).toLocaleDateString('pt-BR'); }
