@@ -773,7 +773,7 @@
         '<p>' + new Date(o.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) + ' · <strong>' + dinheiro(o.total_cents) + '</strong></p>' +
         '<p>' + esc(o.customer_name) + ' · <a href="' + esc(whatsapp) + '" target="_blank" rel="noopener">' + esc(o.phone) + '</a>' + (o.city ? ' · ' + esc(o.city) + ' - ' + esc(o.state) : '') + '</p>' +
         (!o.stock_deducted && o.status !== 'cancelado'
-          ? '<p>Cliente escolheu: ' + (o.payment_choice === 'pix' ? 'Pix' : 'Cartão') + ' · ' + dinheiro(valorPedido(o, o.payment_choice === 'pix')) + '</p>' : '') +
+          ? '<p>Cliente escolheu: ' + ({ pix: 'Pix', cartao: 'Cartão', boleto: 'Boleto' }[o.payment_choice] || 'Cartão') + ' · ' + dinheiro(valorPedido(o, o.payment_choice !== 'cartao')) + '</p>' : '') +
         (o.payment_method ? '<p>Pagamento: ' + esc(PAGAMENTOS[o.payment_method] || o.payment_method) + '</p>' : '') +
         (o.mp_payment_id ? '<p>Mercado Pago: ' + esc(STATUS_MP[o.mp_status] || o.mp_status) + ' · nº ' + esc(o.mp_payment_id) + '. Devoluções são feitas no Mercado Pago.</p>' : '') +
         (o.payment_issue ? '<p class="pedido-alerta">' + esc(o.payment_issue) + '</p>' : '') +

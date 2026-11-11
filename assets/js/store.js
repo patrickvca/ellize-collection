@@ -63,6 +63,24 @@
       });
     }).catch(function () { return { error: 'Sem conexão. Tente novamente.' }; });
   }
+  var FORMAS = { pix: 'Pix', cartao: 'Cartão', boleto: 'Boleto' };
+  function cepComTraco(valor) {
+    var numeros = String(valor || '').replace(/\D/g, '').slice(0, 8);
+    return numeros.length > 5 ? numeros.slice(0, 5) + '-' + numeros.slice(5) : numeros;
+  }
+  function buscarCep(cep) {
+    return fetch('https://viacep.com.br/ws/' + cep + '/json/').then(function (r) { return r.json(); });
+  }
+  function enderecoCurto(e) {
+    return e.street + ', ' + e.number + (e.complement ? ', ' + e.complement : '') + ' · ' + e.district + ', ' + e.city + ' - ' + e.state;
+  }
+  function cotar(cep, itens) {
+    return fetch(URL_SUPABASE + '/functions/v1/frete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: CHAVE_PUBLICA },
+      body: JSON.stringify({ cep: cep, items: itens })
+    }).then(function (r) { return r.json(); });
+  }
   function traduzirErro(erro) {
     var m = (erro && erro.message) || '';
     if (erro && erro.code === 'P0001') return m;
@@ -253,8 +271,12 @@
         '<button class="botao botao-vinho botao-largo" type="submit"' + (livres.length ? '>Adicionar à sacola' : ' disabled>Esgotado') + '</button>' +
         '<a class="botao botao-linha botao-largo" target="_blank" rel="noopener" href="' + WHATSAPP + '?text=' +
         encodeURIComponent('Olá! Tenho uma dúvida sobre: ' + p.name) + '">' + icone('i-whatsapp') + 'Tirar dúvida no WhatsApp</a>' +
+        '<div class="frete-produto"><label class="campo">Calcule o frete<span class="frete-linha">' +
+        '<input id="cep-produto" inputmode="numeric" autocomplete="postal-code" maxlength="9" placeholder="00000-000">' +
+        '<button class="botao botao-linha" type="button" id="calcular-produto">Calcular</button></span></label>' +
+        '<div id="frete-produto" aria-live="polite"></div></div>' +
         '<div class="sanfona"><details open><summary>Sobre a peça</summary><p>' + esc(p.description) + '</p></details>' +
-        '<details><summary>Entrega</summary><p>Enviamos para todo o Brasil pelos Correios, com valor e prazo calculados pelo CEP na sacola. Em Vitória da Conquista, você retira na loja sem custo ou recebe em casa por R$ 10,00.</p></details>' +
+        '<details><summary>Entrega</summary><p>Enviamos para todo o Brasil pelos Correios, com valor e prazo calculados pelo CEP. Em Vitória da Conquista, você retira na loja sem custo ou recebe em casa por R$ 10,00.</p></details>' +
         '<details><summary>Trocas e devoluções</summary><p>Você tem até 7 dias depois do recebimento para pedir troca ou devolução. <a href="politicas.html">Ver a política completa</a>.</p></details></div>' +
         '</form>';
       $('#form-produto').addEventListener('submit', function (evento) {
@@ -266,6 +288,33 @@
         $('#erro-tamanho').hidden = !!escolhido;
         if (cor && escolhido) window.Ellize.adicionar(p, cor, escolhido.value);
       });
+      var campoCep = $('#cep-produto');
+      try { campoCep.value = cepComTraco(localStorage.getItem('ellize:cep') || ''); } catch (e) {}
+      function calcularNoProduto() {
+        var cep = campoCep.value.replace(/\D/g, '');
+        var caixa = $('#frete-produto');
+        if (cep.length !== 8) { caixa.innerHTML = '<p class="mensagem mensagem-erro">Informe um CEP com 8 números.</p>'; return; }
+        caixa.innerHTML = '<p class="nota-pequena">Calculando o frete…</p>';
+        cotar(cep, [{ product_id: p.id, quantity: 1 }]).then(function (dados) {
+          if (dados.error) {
+            caixa.innerHTML = '<p class="mensagem mensagem-erro">' + esc(dados.error) + '</p>';
+            return;
+          }
+          try { localStorage.setItem('ellize:cep', dados.cep); } catch (e) {}
+          caixa.innerHTML = '<p class="nota-pequena">Entrega para ' + esc(dados.city + ' - ' + dados.state) + ', para 1 peça:</p><ul class="frete-lista">' +
+            dados.options.map(function (o) {
+              return '<li><span>' + esc(o.service) + (o.days ? ' · até ' + o.days + (o.days === 1 ? ' dia' : ' dias') : '') + '</span><strong>' +
+                (o.price_cents ? dinheiro(o.price_cents) : 'Grátis') + '</strong></li>';
+            }).join('') + '</ul>';
+        }, function () {
+          caixa.innerHTML = '<p class="mensagem mensagem-erro">Não foi possível calcular o frete. Verifique sua conexão.</p>';
+        });
+      }
+      campoCep.addEventListener('input', function () { campoCep.value = cepComTraco(campoCep.value); });
+      campoCep.addEventListener('keydown', function (evento) {
+        if (evento.key === 'Enter') { evento.preventDefault(); calcularNoProduto(); }
+      });
+      $('#calcular-produto').addEventListener('click', calcularNoProduto);
       $('#form-produto').addEventListener('change', function (evento) {
         if (evento.target.name !== 'cor') return;
         var marcado = this.querySelector('input[name="tamanho"]:checked');
@@ -303,6 +352,8 @@
     var frete = null;
     var consultaFrete = 0;
     var saldoCredito = 0;
+    var enderecos = [];
+    var enderecoEscolhido = null;
     function valorFrete() { return frete && frete.escolhida ? frete.escolhida.price_cents : 0; }
     function usandoCredito() { var campo = $('#usar-credito'); return saldoCredito > 0 && !!(campo && campo.checked); }
     function menosCredito(valor) { return usandoCredito() ? Math.max(0, valor - saldoCredito) : valor; }
@@ -318,10 +369,8 @@
       var pixCheio = total(true) + valorFrete();
       var cartao = menosCredito(cartaoCheio);
       var pix = menosCredito(pixCheio);
-      var formPedido = $('#form-pedido');
-      var cheio = formPedido && formPedido.pagamento.value === 'pix' ? pixCheio : cartaoCheio;
       $('#linha-credito').hidden = !usandoCredito();
-      $('#valor-credito').textContent = '− ' + dinheiro(Math.min(saldoCredito, cheio));
+      $('#valor-credito').textContent = '− ' + dinheiro(Math.min(saldoCredito, cartaoCheio));
       $('#linha-frete').hidden = !escolhida;
       $('#valor-frete').textContent = valorFrete() ? dinheiro(valorFrete()) : 'Grátis';
       if ($('#campo-endereco')) $('#campo-endereco').hidden = !escolhida || escolhida.kind === 'retirada';
@@ -329,10 +378,6 @@
       $('#total-pix').textContent = dinheiro(pix);
       $('#linha-pix').hidden = pix >= cartao;
       $('#rotulo-total').textContent = pix < cartao ? 'Total no cartão' : (escolhida ? 'Total' : 'Total das peças');
-      if ($('#opcao-pix')) {
-        $('#opcao-pix').textContent = 'Pix · ' + dinheiro(pix);
-        $('#opcao-cartao').textContent = 'Cartão · ' + dinheiro(cartao);
-      }
     }
     function desenharVazio() {
       alvo.innerHTML = estado('Sua sacola está vazia', 'Escolha suas peças nas novidades.', '<a class="botao botao-vinho" href="loja.html">Ver novidades</a>');
@@ -366,10 +411,12 @@
       var form = $('#form-pedido');
       if (!form || form.dataset.cep === dados.cep) return;
       form.dataset.cep = dados.cep;
-      form.rua.value = dados.street || '';
-      form.bairro.value = dados.district || '';
-      form.numero.value = '';
-      form.complemento.value = '';
+      var salvo = enderecoEscolhido && enderecoEscolhido.cep === dados.cep ? enderecoEscolhido : null;
+      form.rua.value = salvo ? salvo.street : (dados.street || '');
+      form.bairro.value = salvo ? salvo.district : (dados.district || '');
+      form.numero.value = salvo ? salvo.number : '';
+      form.complemento.value = salvo ? (salvo.complement || '') : '';
+      $('#opcao-salvar-endereco').hidden = !!salvo;
       form.cidade.value = dados.city;
       form.estado.value = dados.state;
     }
@@ -447,24 +494,35 @@
         '<form id="form-pedido" class="formulario" novalidate>' +
         '<label class="campo">Nome completo<input name="nome" autocomplete="name" required minlength="2" maxlength="120" value="' + esc(meta.full_name || meta.name || '') + '"></label>' +
         '<label class="campo">Telefone com DDD<input name="telefone" type="tel" autocomplete="tel" inputmode="tel" required maxlength="20"></label>' +
-        '<fieldset class="opcoes"><legend>Como quer pagar?</legend>' +
-        '<label><input type="radio" name="pagamento" value="pix" checked><span id="opcao-pix"></span></label>' +
-        '<label><input type="radio" name="pagamento" value="cartao"><span id="opcao-cartao"></span></label></fieldset>' +
         '<fieldset class="endereco" id="campo-endereco" hidden><legend>Endereço de entrega</legend>' +
         '<label class="campo">Rua<input name="rua" autocomplete="address-line1" maxlength="120"></label>' +
         '<div class="endereco-linha endereco-numero"><label class="campo">Número<input name="numero" inputmode="text" maxlength="10"></label>' +
         '<label class="campo">Complemento (opcional)<input name="complemento" autocomplete="address-line2" maxlength="60"></label></div>' +
         '<label class="campo">Bairro<input name="bairro" maxlength="60"></label>' +
         '<div class="endereco-linha endereco-cidade"><label class="campo">Cidade<input name="cidade" readonly tabindex="-1"></label>' +
-        '<label class="campo">Estado<input name="estado" readonly tabindex="-1"></label></div></fieldset>' +
+        '<label class="campo">Estado<input name="estado" readonly tabindex="-1"></label></div>' +
+        '<label class="credito-opcao" id="opcao-salvar-endereco"><input type="checkbox" id="salvar-endereco" checked> Salvar este endereço na minha conta</label></fieldset>' +
         '<label class="credito-opcao" id="opcao-credito" hidden><input type="checkbox" id="usar-credito"> <span id="texto-credito"></span></label>' +
         '<label class="campo">Observação (opcional)<textarea name="nota" rows="2" maxlength="500"></textarea></label>' +
         '<p class="mensagem mensagem-erro" id="erro-pedido" role="alert" hidden></p>' +
         '<button class="botao botao-vinho botao-largo" type="submit">Fechar pedido</button>' +
-        '<p class="nota-pequena">Ao fechar, você recebe as instruções para pagar.</p></form>';
+        '<p class="nota-pequena">Ao fechar, você escolhe a forma de pagamento na próxima tela.</p></form>';
       $('#form-pedido').addEventListener('submit', enviarPedido);
       $('#form-pedido').addEventListener('change', function (evento) {
-        if (evento.target.name === 'pagamento' || evento.target.id === 'usar-credito') atualizarTotais();
+        if (evento.target.id === 'usar-credito') atualizarTotais();
+      });
+      sb.from('customer_addresses').select('*').order('is_default', { ascending: false }).order('created_at').then(function (r) {
+        if (r.error || !r.data.length) return;
+        enderecos = r.data;
+        $('#enderecos-salvos').innerHTML = '<fieldset class="opcoes opcoes-frete enderecos-escolha"><legend>Entregar em</legend>' +
+          enderecos.map(function (e, n) {
+            return '<label><input type="radio" name="endereco-salvo" value="' + n + '"' + (n === 0 ? ' checked' : '') + '><span>' + esc(enderecoCurto(e)) + '</span></label>';
+          }).join('') + '<label><input type="radio" name="endereco-salvo" value=""><span>Outro endereço</span></label></fieldset>';
+        $('#enderecos-salvos').addEventListener('change', function (evento) {
+          if (evento.target.name !== 'endereco-salvo') return;
+          escolherEndereco(evento.target.value === '' ? null : enderecos[+evento.target.value]);
+        });
+        escolherEndereco(enderecos[0]);
       });
       sb.from('store_credits').select('amount_cents').then(function (r) {
         if (r.error) return;
@@ -475,6 +533,26 @@
         atualizarTotais();
       });
       atualizarTotais();
+    }
+    function escolherEndereco(e) {
+      enderecoEscolhido = e;
+      var form = $('#form-pedido');
+      if (form) delete form.dataset.cep;
+      if (!e) {
+        $('#opcao-salvar-endereco').hidden = false;
+        $('#form-frete').cep.focus();
+        return;
+      }
+      $('#form-frete').cep.value = formatarCep(e.cep);
+      calcularFrete(e.cep);
+    }
+    function salvarEnderecoNovo(form) {
+      if (enderecoEscolhido || !$('#salvar-endereco').checked) return Promise.resolve();
+      return sb.from('customer_addresses').insert({
+        cep: frete.cep, street: form.rua.value.trim(), number: form.numero.value.trim(),
+        complement: form.complemento.value.trim() || null, district: form.bairro.value.trim(),
+        city: form.cidade.value, state: form.estado.value, is_default: !enderecos.length
+      }).then(function () {}, function () {});
     }
     function enviarPedido(evento) {
       evento.preventDefault();
@@ -502,7 +580,7 @@
         p_items: linhas.map(function (i) { return { product_id: i.id, color: i.color, size: i.size, quantity: i.qty }; }),
         p_name: form.nome.value,
         p_phone: form.telefone.value,
-        p_payment: form.pagamento.value,
+        p_payment: 'cartao',
         p_quote: entrega.id,
         p_use_credit: usandoCredito(),
         p_address: entrega.kind === 'retirada' ? null : textoEndereco(form),
@@ -515,11 +593,7 @@
           return;
         }
         var pedido = resposta.data;
-        var texto = 'Olá! Fiz o pedido #' + pedido.number + ' no site da Ellize Collection.\n\n' +
-          linhas.map(function (i) { return i.qty + 'x ' + produtos[i.id].name + ' (' + (i.color !== 'Única' ? i.color + ', ' : '') + i.size + ')'; }).join('\n') +
-          (pedido.credit_cents ? '\n\nCrédito usado: ' + dinheiro(pedido.credit_cents) : '') + '\n\nTotal: ' + dinheiro(pedido.total_cents) + '\nPagamento: ' + (form.pagamento.value === 'pix' ? 'Pix' : 'Cartão') + '\nEntrega: ' + entrega.service +
-          (entrega.kind === 'retirada' ? '' : '\nFrete: ' + dinheiro(entrega.price_cents) + (entrega.days ? ' (' + prazoFrete(entrega) + ')' : '') + '\nEndereço: ' + textoEndereco(form) + ', CEP ' + formatarCep(frete.cep));
-        var linkPedido = WHATSAPP + '?text=' + encodeURIComponent(texto);
+        var salvar = entrega.kind === 'retirada' ? Promise.resolve() : salvarEnderecoNovo(form);
         if (pedido.total_cents === 0) {
           carrinho.salvar([]);
           alvo.innerHTML = '<div class="estado estado-sucesso"><span class="etiqueta">Pedido #' + esc(pedido.number) + '</span>' +
@@ -528,24 +602,8 @@
           window.scrollTo(0, 0);
           return;
         }
-        ocupado(botao, true, 'Abrindo o pagamento…');
-        pagamento({ order_id: pedido.id }).then(function (cobranca) {
-          carrinho.salvar([]);
-          if (cobranca.url) { location.href = cobranca.url; return; }
-          if (cobranca.disponivel) {
-            alvo.innerHTML = '<div class="estado estado-sucesso"><span class="etiqueta">Pedido #' + esc(pedido.number) + '</span>' +
-              '<h2>Pedido recebido</h2><p>Não foi possível abrir o pagamento agora. Você pode tentar de novo em Minhas compras.</p>' +
-              '<a class="botao botao-vinho" href="conta.html">Ver meus pedidos</a></div>';
-            window.scrollTo(0, 0);
-            return;
-          }
-          alvo.innerHTML = '<div class="estado estado-sucesso"><span class="etiqueta">Pedido #' + esc(pedido.number) + '</span>' +
-            '<h2>Pedido recebido</h2><p>Total de ' + dinheiro(pedido.total_cents) + '. Abrindo o WhatsApp para você combinar o pagamento. Se não abrir, use o botão abaixo.</p>' +
-            '<a class="botao botao-vinho" href="' + linkPedido + '">' + icone('i-whatsapp') + 'Enviar no WhatsApp</a>' +
-            '<a class="botao botao-linha" href="conta.html">Ver meus pedidos</a></div>';
-          window.scrollTo(0, 0);
-          location.href = linkPedido;
-        });
+        carrinho.salvar([]);
+        salvar.then(function () { location.href = 'pagamento.html?pedido=' + encodeURIComponent(pedido.id); });
       }, function () {
         ocupado(botao, false);
         erro.textContent = 'Sem conexão. Verifique sua internet e tente novamente.';
@@ -562,6 +620,7 @@
       if (JSON.stringify(validas) !== JSON.stringify(carrinho.ler())) carrinho.salvar(validas);
       if (!validas.length) { desenharVazio(); return; }
       alvo.innerHTML = '<ul class="linhas" id="itens"></ul><aside class="resumo">' +
+        '<div id="enderecos-salvos"></div>' +
         '<form id="form-frete" novalidate><label class="campo">Calcule o frete pelo CEP<span class="frete-linha">' +
         '<input name="cep" inputmode="numeric" autocomplete="postal-code" maxlength="9" placeholder="00000-000">' +
         '<button class="botao botao-linha" type="submit">Calcular</button></span></label></form>' +
@@ -574,6 +633,14 @@
       desenharLinhas();
       desenharFechamento(r[1].data.session);
       ligarFrete();
+      $('#form-frete').addEventListener('submit', function () {
+        var cep = $('#form-frete').cep.value.replace(/\D/g, '');
+        if (!enderecoEscolhido || enderecoEscolhido.cep === cep) return;
+        enderecoEscolhido = null;
+        var outro = document.querySelector('[name="endereco-salvo"][value=""]');
+        if (outro) outro.checked = true;
+        $('#opcao-salvar-endereco').hidden = false;
+      });
       document.addEventListener('ellize:sacola', function () { if ($('#itens')) desenharLinhas(); });
       $('#itens').addEventListener('click', function (evento) {
         var botao = evento.target.closest('[data-acao]');
@@ -715,7 +782,9 @@
       alvo.innerHTML = '<div class="painel-conta"><div class="conta-topo"><div><span class="etiqueta">Minha conta</span>' +
         '<h1>Olá' + (meta.full_name ? ', ' + esc(meta.full_name.split(' ')[0]) : '') + '</h1><p>' + esc(sessao.user.email) + '</p></div>' +
         '<button class="botao botao-linha" id="sair" type="button">Sair</button></div>' +
-        '<h2>Minhas compras</h2><div id="saldo-credito"></div><div id="pedidos" aria-busy="true"><p>Carregando compras…</p></div></div>';
+        '<h2>Minhas compras</h2><div id="saldo-credito"></div><div id="pedidos" aria-busy="true"><p>Carregando compras…</p></div>' +
+        '<h2 class="titulo-enderecos">Meus endereços</h2><div id="enderecos"><p>Carregando endereços…</p></div></div>';
+      carregarEnderecos();
       $('#sair').addEventListener('click', function () {
         sb.auth.signOut().then(function () { desenharAcesso('entrar'); });
       });
@@ -751,22 +820,16 @@
             comprasPorId[o.id] = o;
             return '<li class="pedido"><div class="pedido-topo"><strong>Pedido #' + esc(o.number) + '</strong>' +
               '<span class="pedido-status">' + esc(STATUS[o.status] || o.status) + '</span></div>' +
-              '<p>' + new Date(o.created_at).toLocaleDateString('pt-BR') + ' · ' + dinheiro(o.total_cents) + ' · ' + (o.payment_choice === 'pix' ? 'Pix' : 'Cartão') + ' · ' + (o.delivery === 'retirada' ? 'Retirar na loja' : esc(o.shipping_service || 'Receber em casa')) + '</p>' +
+              '<p>' + new Date(o.created_at).toLocaleDateString('pt-BR') + ' · ' + dinheiro(o.total_cents) + (o.status === 'novo' && !o.stock_deducted ? '' : ' · ' + (FORMAS[o.payment_choice] || 'Cartão')) + ' · ' + (o.delivery === 'retirada' ? 'Retirar na loja' : esc(o.shipping_service || 'Receber em casa')) + '</p>' +
               '<ul>' + o.order_items.map(function (i) {
                 return '<li>' + i.quantity + 'x ' + esc(i.product_name) + ' (' + (i.color !== 'Única' ? esc(i.color) + ', ' : '') + esc(i.size) + ')</li>';
               }).join('') + '</ul>' +
               rastreioHTML(o) + solicitacaoHTML(o) + '<div class="pedido-botoes">' +
-              (o.status === 'novo' && !o.stock_deducted && !o.payment_issue && o.total_cents > 0 ? '<button class="botao botao-vinho" type="button" data-pagar="' + esc(o.id) + '" hidden>Pagar agora</button>' : '') +
+              (o.status === 'novo' && !o.stock_deducted && !o.payment_issue && o.total_cents > 0 ? '<a class="botao botao-vinho" href="pagamento.html?pedido=' + encodeURIComponent(o.id) + '">Pagar agora</a>' : '') +
               (o.status === 'entregue' || o.status === 'cancelado' ? '<button class="botao botao-vinho" type="button" data-recomprar="' + esc(o.id) + '">Comprar novamente</button>' : '') +
               (podeSolicitar(o) ? '<button class="botao botao-linha" type="button" data-solicitar="' + esc(o.id) + '">Pedir troca ou devolução</button>' : '') +
               '</div></li>';
           }).join('') + '</ul>';
-          var botoes = caixa.querySelectorAll('[data-pagar]');
-          if (botoes.length) {
-            pagamento({ check: true }).then(function (estadoPagamento) {
-              if (estadoPagamento.disponivel) botoes.forEach(function (b) { b.hidden = false; });
-            });
-          }
           caixa.addEventListener('submit', function (evento) {
             if (!evento.target.matches('[data-form-solicitar]')) return;
             evento.preventDefault();
@@ -777,17 +840,116 @@
             if (recomprar) { comprarNovamente(comprasPorId[recomprar.dataset.recomprar], recomprar); return; }
             var solicitar = evento.target.closest('[data-solicitar]');
             if (solicitar) { abrirSolicitacao(comprasPorId[solicitar.dataset.solicitar], solicitar); return; }
-            var botao = evento.target.closest('[data-pagar]');
-            if (!botao) return;
-            ocupado(botao, true, 'Abrindo o pagamento…');
-            pagamento({ order_id: botao.dataset.pagar }).then(function (cobranca) {
-              if (cobranca.url) { location.href = cobranca.url; return; }
-              ocupado(botao, false);
-              window.alert(cobranca.error || 'Não foi possível abrir o pagamento. Tente novamente.');
-            });
           });
         });
     }
+
+    var meusEnderecos = [];
+    function carregarEnderecos() {
+      sb.from('customer_addresses').select('*').order('is_default', { ascending: false }).order('created_at').then(function (r) {
+        var caixa = $('#enderecos');
+        if (!caixa) return;
+        if (r.error) { caixa.innerHTML = '<p class="mensagem mensagem-erro">Não foi possível carregar seus endereços.</p>'; return; }
+        meusEnderecos = r.data;
+        desenharEnderecos();
+      });
+    }
+    function desenharEnderecos() {
+      var caixa = $('#enderecos');
+      caixa.innerHTML = (meusEnderecos.length ? '<ul class="enderecos-lista">' + meusEnderecos.map(function (e) {
+        return '<li class="endereco-card' + (e.is_default ? ' padrao' : '') + '"><div><strong>' + esc(e.street) + ', ' + esc(e.number) + (e.complement ? ', ' + esc(e.complement) : '') + '</strong>' +
+          '<span>' + esc(e.district) + ', ' + esc(e.city) + ' - ' + esc(e.state) + ' · CEP ' + cepComTraco(e.cep) + '</span></div>' +
+          '<div class="endereco-acoes">' + (e.is_default ? '<span class="selo-padrao">Padrão</span>' : '<button class="botao-texto" type="button" data-padrao="' + esc(e.id) + '">Definir como padrão</button>') +
+          '<button class="botao-texto" type="button" data-editar-endereco="' + esc(e.id) + '">Editar</button>' +
+          '<button class="botao-texto botao-perigo" type="button" data-excluir-endereco="' + esc(e.id) + '">Excluir</button></div></li>';
+      }).join('') + '</ul>' : '<p class="nota-pequena">Nenhum endereço salvo. Salve um para fechar os próximos pedidos mais rápido.</p>') +
+        '<button class="botao botao-linha" type="button" data-novo-endereco>Adicionar endereço</button><div id="form-endereco-caixa"></div>';
+    }
+    function abrirFormEndereco(e) {
+      var caixa = $('#form-endereco-caixa');
+      caixa.innerHTML = '<form class="formulario endereco-form" id="form-endereco" novalidate>' +
+        '<h3>' + (e ? 'Editar endereço' : 'Novo endereço') + '</h3>' +
+        '<label class="campo">CEP<input name="cep" inputmode="numeric" autocomplete="postal-code" maxlength="9" placeholder="00000-000" value="' + (e ? cepComTraco(e.cep) : '') + '"></label>' +
+        '<label class="campo">Rua<input name="rua" autocomplete="address-line1" maxlength="120" value="' + (e ? esc(e.street) : '') + '"></label>' +
+        '<div class="endereco-linha endereco-numero"><label class="campo">Número<input name="numero" maxlength="10" value="' + (e ? esc(e.number) : '') + '"></label>' +
+        '<label class="campo">Complemento (opcional)<input name="complemento" autocomplete="address-line2" maxlength="60" value="' + (e && e.complement ? esc(e.complement) : '') + '"></label></div>' +
+        '<label class="campo">Bairro<input name="bairro" maxlength="60" value="' + (e ? esc(e.district) : '') + '"></label>' +
+        '<div class="endereco-linha endereco-cidade"><label class="campo">Cidade<input name="cidade" readonly tabindex="-1" value="' + (e ? esc(e.city) : '') + '"></label>' +
+        '<label class="campo">Estado<input name="estado" readonly tabindex="-1" value="' + (e ? esc(e.state) : '') + '"></label></div>' +
+        (e && e.is_default ? '' : '<label class="credito-opcao"><input type="checkbox" name="padrao"' + (meusEnderecos.length ? '' : ' checked') + '> Usar como endereço padrão</label>') +
+        '<p class="mensagem mensagem-erro" role="alert" hidden></p>' +
+        '<div class="pedido-botoes"><button class="botao botao-vinho" type="submit">Salvar endereço</button>' +
+        '<button class="botao-texto" type="button" data-cancelar-endereco>Cancelar</button></div></form>';
+      var form = $('#form-endereco');
+      form.dataset.id = e ? e.id : '';
+      form.cep.addEventListener('input', function () {
+        form.cep.value = cepComTraco(form.cep.value);
+        var cep = form.cep.value.replace(/\D/g, '');
+        if (cep.length !== 8) return;
+        buscarCep(cep).then(function (dados) {
+          var erro = form.querySelector('.mensagem-erro');
+          if (dados.erro) { erro.textContent = 'CEP não encontrado. Confira os números.'; erro.hidden = false; return; }
+          erro.hidden = true;
+          form.rua.value = dados.logradouro || form.rua.value;
+          form.bairro.value = dados.bairro || form.bairro.value;
+          form.cidade.value = dados.localidade;
+          form.estado.value = dados.uf;
+          (form.rua.value ? form.numero : form.rua).focus();
+        }, function () {});
+      });
+      form.addEventListener('submit', salvarEndereco);
+      form.cep.focus();
+    }
+    function salvarEndereco(evento) {
+      evento.preventDefault();
+      var form = evento.target;
+      var erro = form.querySelector('.mensagem-erro');
+      var botao = form.querySelector('button[type="submit"]');
+      var dados = {
+        cep: form.cep.value.replace(/\D/g, ''), street: form.rua.value.trim(), number: form.numero.value.trim(),
+        complement: form.complemento.value.trim() || null, district: form.bairro.value.trim(), city: form.cidade.value, state: form.estado.value
+      };
+      erro.hidden = true;
+      if (dados.cep.length !== 8 || !dados.city) { erro.textContent = 'Informe um CEP válido.'; erro.hidden = false; return; }
+      if (!dados.street || !dados.number || !dados.district) { erro.textContent = 'Preencha rua, número e bairro.'; erro.hidden = false; return; }
+      ocupado(botao, true, 'Salvando…');
+      var pedido = form.dataset.id
+        ? sb.from('customer_addresses').update(dados).eq('id', form.dataset.id).select()
+        : sb.from('customer_addresses').insert(dados).select();
+      pedido.then(function (r) {
+        if (r.error || !r.data.length) throw r.error || new Error('endereço');
+        var padrao = form.padrao && form.padrao.checked;
+        return padrao ? sb.rpc('set_default_address', { p_id: r.data[0].id }) : null;
+      }).then(function () { carregarEnderecos(); }, function (falha) {
+        ocupado(botao, false);
+        erro.textContent = falha && falha.code === 'P0001' ? falha.message : 'Não foi possível salvar o endereço.';
+        erro.hidden = false;
+      });
+    }
+    function cuidarEnderecos(evento) {
+      var alvoClique = evento.target;
+      if (alvoClique.closest('[data-novo-endereco]')) { abrirFormEndereco(null); return; }
+      if (alvoClique.closest('[data-cancelar-endereco]')) { $('#form-endereco-caixa').innerHTML = ''; return; }
+      var editar = alvoClique.closest('[data-editar-endereco]');
+      if (editar) { abrirFormEndereco(meusEnderecos.filter(function (e) { return e.id === editar.dataset.editarEndereco; })[0]); return; }
+      var padrao = alvoClique.closest('[data-padrao]');
+      if (padrao) {
+        padrao.disabled = true;
+        sb.rpc('set_default_address', { p_id: padrao.dataset.padrao }).then(carregarEnderecos);
+        return;
+      }
+      var excluir = alvoClique.closest('[data-excluir-endereco]');
+      if (excluir && window.confirm('Excluir este endereço?')) {
+        var era = meusEnderecos.filter(function (e) { return e.id === excluir.dataset.excluirEndereco; })[0];
+        sb.from('customer_addresses').delete().eq('id', era.id).then(function () {
+          var resto = meusEnderecos.filter(function (e) { return e.id !== era.id; });
+          return era.is_default && resto.length ? sb.rpc('set_default_address', { p_id: resto[0].id }) : null;
+        }).then(carregarEnderecos);
+      }
+    }
+    alvo.addEventListener('click', function (evento) {
+      if (evento.target.closest('#enderecos')) cuidarEnderecos(evento);
+    });
 
     function dataCurta(valor) { return new Date(valor).toLocaleDateString('pt-BR'); }
     function fimDoPrazo(o) { return new Date(new Date(o.delivered_at).getTime() + 7 * 24 * 60 * 60 * 1000); }
@@ -901,7 +1063,103 @@
     });
   }
 
-  var iniciar = { loja: iniciarLoja, produto: iniciarProduto, carrinho: iniciarCarrinho, conta: iniciarConta };
+  /* Tela de pagamento: o valor segue a forma escolhida */
+  function iniciarPagamento() {
+    var alvo = $('#pagamento');
+    var id = parametros.get('pedido');
+    var DESCRICOES = {
+      pix: 'Aprovação na hora, com o valor do Pix.',
+      cartao: 'Crédito ou débito, em parcelas conforme o Mercado Pago.',
+      boleto: 'Com o valor do Pix. Pode levar alguns dias para compensar.'
+    };
+    sb.auth.getSession().then(function (r) {
+      if (!r.data.session) {
+        alvo.innerHTML = estado('Entre na sua conta', 'Para pagar, entre na conta usada no pedido.', '<a class="botao botao-vinho" href="conta.html">Entrar</a>');
+        return;
+      }
+      if (!id) { alvo.innerHTML = estado('Pedido não encontrado', 'Abra o pedido em Minhas compras.', '<a class="botao botao-vinho" href="conta.html">Minhas compras</a>'); return; }
+      sb.from('orders').select('*,order_items(*)').eq('id', id).maybeSingle().then(function (resposta) {
+        if (resposta.error) { alvo.innerHTML = erroCarregar(); return; }
+        var o = resposta.data;
+        if (!o) { alvo.innerHTML = estado('Pedido não encontrado', 'Abra o pedido em Minhas compras.', '<a class="botao botao-vinho" href="conta.html">Minhas compras</a>'); return; }
+        if (o.status !== 'novo' || o.stock_deducted) {
+          alvo.innerHTML = estado('Pedido #' + o.number + ' já está em andamento', 'Acompanhe pelo Minhas compras.', '<a class="botao botao-vinho" href="conta.html">Minhas compras</a>');
+          return;
+        }
+        desenhar(o);
+      }, function () { alvo.innerHTML = erroCarregar(); });
+    });
+    function valor(o, forma) {
+      var bruto = o.shipping_cents + o.order_items.reduce(function (soma, i) {
+        return soma + i.quantity * (forma === 'cartao' ? i.card_price_cents : i.pix_price_cents);
+      }, 0);
+      return Math.max(0, bruto - o.credit_cents);
+    }
+    function desenhar(o) {
+      alvo.innerHTML = '<div class="pagamento-grade"><form class="formulario" id="form-pagamento" novalidate>' +
+        '<fieldset class="formas"><legend>Como você quer pagar o pedido #' + esc(o.number) + '?</legend>' +
+        ['pix', 'cartao', 'boleto'].map(function (forma) {
+          return '<label class="forma"><input type="radio" name="forma" value="' + forma + '">' +
+            '<span class="forma-nome">' + (forma === 'cartao' ? 'Cartão de crédito ou débito' : FORMAS[forma]) + '<small>' + DESCRICOES[forma] + '</small></span>' +
+            '<strong class="forma-valor">' + dinheiro(valor(o, forma)) + '</strong></label>';
+        }).join('') + '</fieldset>' +
+        '<p class="mensagem mensagem-erro" id="erro-pagamento" role="alert" hidden></p>' +
+        '<button class="botao botao-vinho botao-largo" type="submit" disabled>Escolha a forma de pagamento</button>' +
+        '<p class="nota-pequena">O pagamento é feito no ambiente seguro do Mercado Pago.</p></form>' +
+        '<aside class="resumo"><h2>Resumo</h2><ul class="resumo-itens">' + o.order_items.map(function (i) {
+          return '<li>' + i.quantity + 'x ' + esc(i.product_name) + ' (' + (i.color !== 'Única' ? esc(i.color) + ', ' : '') + esc(i.size) + ')</li>';
+        }).join('') + '</ul>' +
+        '<p class="resumo-total"><span>' + esc(o.shipping_service || 'Entrega') + '</span><strong>' + (o.shipping_cents ? dinheiro(o.shipping_cents) : 'Grátis') + '</strong></p>' +
+        (o.credit_cents ? '<p class="resumo-total"><span>Crédito da loja</span><strong>− ' + dinheiro(o.credit_cents) + '</strong></p>' : '') +
+        '<p class="resumo-total"><span>Total</span><strong id="total-pagamento">Escolha a forma</strong></p></aside></div>';
+      var form = $('#form-pagamento');
+      var botao = form.querySelector('button[type="submit"]');
+      form.addEventListener('change', function () {
+        var forma = form.forma.value;
+        $('#total-pagamento').textContent = dinheiro(valor(o, forma));
+        botao.disabled = false;
+        botao.textContent = 'Pagar ' + dinheiro(valor(o, forma)) + ' com ' + { pix: 'Pix', cartao: 'cartão', boleto: 'boleto' }[forma];
+      });
+      form.addEventListener('submit', function (evento) {
+        evento.preventDefault();
+        var forma = form.forma.value;
+        var erro = $('#erro-pagamento');
+        if (!forma) return;
+        erro.hidden = true;
+        var texto = botao.textContent;
+        ocupado(botao, true, 'Abrindo o pagamento…');
+        sb.rpc('set_order_payment', { p_order: o.id, p_choice: forma }).then(function (r) {
+          if (r.error) throw r.error;
+          return pagamento({ order_id: o.id }).then(function (cobranca) {
+            if (cobranca.url) { location.href = cobranca.url; return; }
+            if (cobranca.disponivel) throw new Error(cobranca.error || 'Não foi possível abrir o pagamento. Tente novamente.');
+            whatsapp(o, forma, r.data.total_cents);
+          });
+        }).catch(function (falha) {
+          ocupado(botao, false);
+          botao.textContent = texto;
+          erro.textContent = falha.code ? traduzirErro(falha) : falha.message;
+          erro.hidden = false;
+        });
+      });
+    }
+    function whatsapp(o, forma, total) {
+      var mensagem = 'Olá! Fiz o pedido #' + o.number + ' no site da Ellize Collection.\n\n' +
+        o.order_items.map(function (i) { return i.quantity + 'x ' + i.product_name + ' (' + (i.color !== 'Única' ? i.color + ', ' : '') + i.size + ')'; }).join('\n') +
+        (o.credit_cents ? '\n\nCrédito usado: ' + dinheiro(o.credit_cents) : '') + '\n\nTotal: ' + dinheiro(total) + '\nPagamento: ' + FORMAS[forma] +
+        '\nEntrega: ' + (o.shipping_service || 'Retirar na loja') +
+        (o.delivery === 'retirada' ? '' : '\nFrete: ' + dinheiro(o.shipping_cents) + '\nEndereço: ' + o.address + ', CEP ' + cepComTraco(o.cep));
+      var link = WHATSAPP + '?text=' + encodeURIComponent(mensagem);
+      alvo.innerHTML = '<div class="estado estado-sucesso"><span class="etiqueta">Pedido #' + esc(o.number) + '</span>' +
+        '<h2>Falta só o pagamento</h2><p>Total de ' + dinheiro(total) + ' no ' + FORMAS[forma] + '. Abrindo o WhatsApp para você combinar o pagamento com a loja. Se não abrir, use o botão abaixo.</p>' +
+        '<a class="botao botao-vinho" href="' + link + '">' + icone('i-whatsapp') + 'Enviar no WhatsApp</a>' +
+        '<a class="botao botao-linha" href="conta.html">Ver minhas compras</a></div>';
+      window.scrollTo(0, 0);
+      location.href = link;
+    }
+  }
+
+  var iniciar = { loja: iniciarLoja, produto: iniciarProduto, carrinho: iniciarCarrinho, conta: iniciarConta, pagamento: iniciarPagamento };
   function iniciarPagina() { iniciar[document.body.dataset.pagina](); }
   window.Ellize.categorias().then(function (lista) {
     if (lista.length) {

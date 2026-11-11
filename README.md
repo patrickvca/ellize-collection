@@ -52,9 +52,10 @@ Segredos da função no Supabase: `MELHOR_ENVIO_TOKEN` e `MELHOR_ENVIO_USER_AGEN
 
 ## Pagamento
 
-Com `MERCADO_PAGO_ACCESS_TOKEN` e `MERCADO_PAGO_WEBHOOK_SECRET` configurados nas funções do Supabase, o pedido segue para o Checkout Pro. Sem eles, o site mantém o fechamento pelo WhatsApp.
+Com `MERCADO_PAGO_ACCESS_TOKEN` e `MERCADO_PAGO_WEBHOOK_SECRET` configurados nas funções do Supabase, o pedido segue para o Checkout Pro. Sem eles, a tela de pagamento leva ao WhatsApp com a forma e o valor escolhidos. O frete também pode ser calculado na página do produto.
 
-- `supabase/functions/pagamento`: cria a cobrança do pedido. Pedido no Pix aceita só Pix, e pedido no cartão aceita só cartão.
+- `pagamento.html`: depois de fechar o pedido, o cliente escolhe Pix, cartão ou boleto. A escolha recalcula o pedido no servidor (`set_order_payment`): Pix e boleto usam o valor do Pix, e cartão usa o valor cheio.
+- `supabase/functions/pagamento`: cria a cobrança só com a forma escolhida.
 - `supabase/functions/pagamento-aviso`: recebe o aviso, confere a assinatura e consulta o pagamento no Mercado Pago. Se aprovado, o pedido vira pago e o estoque baixa.
 
 Problemas como peça sem estoque, valor diferente ou pagamento devolvido aparecem em vermelho no pedido do painel. Cancelar no painel não devolve o dinheiro: a devolução é feita no Mercado Pago. No Mercado Pago, o aviso aponta para `https://ukvivmgyxnuijmglidwm.supabase.co/functions/v1/pagamento-aviso`, com o evento Pagamentos. As duas funções são publicadas com a verificação de JWT desligada, porque autenticam por conta própria. Use `SITE_URL` ao trocar de domínio.
@@ -66,6 +67,10 @@ Em `conta.html`, o cliente acompanha o andamento desde a compra. O código de ra
 A aba Trocas do painel responde às solicitações. A troca vira crédito na conta do cliente (`store_credits`). No fechamento ele usa o crédito e paga só a diferença, e o que sobrar continua na conta. Cancelar um pedido devolve o crédito usado. A política fica em `politicas.html`.
 
 A aba Clientes do painel lista as contas com `admin_list_customers`, restrita a administradores. Contas sem nome usam o nome do último pedido. O valor comprado soma só pedidos finalizados. Em Ver detalhes, a loja vê contato, últimas compras e movimentos de crédito, e ajusta o saldo para mais ou para menos com `admin_adjust_credit`. O motivo aparece para o cliente, e o saldo não fica negativo.
+
+## Endereços
+
+Cada conta salva até 20 endereços em `customer_addresses`, com um padrão. Em Minha conta o cliente cadastra, edita, exclui e escolhe o padrão. No carrinho, o padrão já vem marcado, calcula o frete e preenche o endereço. Um endereço novo usado no pedido pode ser salvo na hora.
 
 ## Publicação
 

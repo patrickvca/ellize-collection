@@ -3,6 +3,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.49.4';
 const SITE_PADRAO = 'https://patrickvca.github.io/ellize-collection';
 const SO_PIX = ['credit_card', 'debit_card', 'prepaid_card', 'ticket', 'atm'];
 const SO_CARTAO = ['bank_transfer', 'ticket', 'atm'];
+const SO_BOLETO = ['credit_card', 'debit_card', 'prepaid_card', 'bank_transfer', 'atm'];
 const VALIDADE_MS = 24 * 60 * 60 * 1000;
 
 const CORS = {
@@ -36,9 +37,10 @@ Deno.serve(async (req) => {
       .eq('id', String(corpo.order_id || '')).maybeSingle();
     if (!pedido || pedido.user_id !== sessao.user.id) return responder({ error: 'Pedido não encontrado.' });
     if (pedido.status !== 'novo' || pedido.stock_deducted) return responder({ error: 'Este pedido não está aguardando pagamento.' });
+    if (pedido.total_cents <= 0) return responder({ error: 'Este pedido não tem valor a pagar.' });
 
     const site = (Deno.env.get('SITE_URL') || SITE_PADRAO).replace(/\/$/, '');
-    const excluidos = pedido.payment_choice === 'pix' ? SO_PIX : SO_CARTAO;
+    const excluidos = pedido.payment_choice === 'pix' ? SO_PIX : pedido.payment_choice === 'boleto' ? SO_BOLETO : SO_CARTAO;
     const resposta = await fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
