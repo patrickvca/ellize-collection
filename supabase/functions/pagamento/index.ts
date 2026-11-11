@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
 
   try {
     const corpo = await req.json();
-    if (corpo.check) return responder({ disponivel: true });
+    if (corpo.check) return responder({ disponivel: true, publicKey: Deno.env.get('MERCADO_PAGO_PUBLIC_KEY') || null });
 
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const jwt = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');

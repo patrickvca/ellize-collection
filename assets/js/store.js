@@ -47,12 +47,12 @@
       (emPromocao(produto) ? '<span class="selo-exemplo selo-promo">Promoção</span>' : '') +
       (esgotado(produto) ? '<span class="selo-exemplo selo-esgotado">Esgotado</span>' : '') + '</span>';
   }
-  function pagamento(corpo) {
+  function pagamento(corpo, funcao) {
     return sb.auth.getSession().then(function (r) {
       var sessao = r.data.session;
       var controle = new AbortController();
       var limite = setTimeout(function () { controle.abort(); }, 15000);
-      return fetch(URL_SUPABASE + '/functions/v1/pagamento', {
+      return fetch(URL_SUPABASE + '/functions/v1/' + (funcao || 'pagamento'), {
         method: 'POST',
         signal: controle.signal,
         headers: { 'Content-Type': 'application/json', apikey: CHAVE_PUBLICA, Authorization: 'Bearer ' + (sessao ? sessao.access_token : CHAVE_PUBLICA) },
@@ -1136,12 +1136,30 @@
   function iniciarPagamento() {
     var alvo = $('#pagamento');
     var id = parametros.get('pedido');
+    var configuracao = pagamento({ check: true });
+    var emailCliente = '';
+    var controleBrick = null;
+    var esperaPix = null;
+    var METODOS = {
+      pix: { bankTransfer: 'all' },
+      cartao: { creditCard: 'all', debitCard: 'all' },
+      boleto: { ticket: 'all' }
+    };
+    var RECUSAS = {
+      cc_rejected_insufficient_amount: 'O cartão não tem limite suficiente.',
+      cc_rejected_bad_filled_security_code: 'O código de segurança está incorreto.',
+      cc_rejected_bad_filled_date: 'A data de validade está incorreta.',
+      cc_rejected_bad_filled_other: 'Confira os dados do cartão.',
+      cc_rejected_call_for_authorize: 'O banco pediu autorização. Fale com o banco do cartão e tente de novo.',
+      cc_rejected_duplicated_payment: 'Este pagamento já foi feito.'
+    };
     var DESCRICOES = {
       pix: 'Aprovação na hora, com o valor do Pix.',
       cartao: 'Crédito ou débito, em parcelas conforme o Mercado Pago.',
       boleto: 'Com o valor do Pix. Pode levar alguns dias para compensar.'
     };
     sb.auth.getSession().then(function (r) {
+      if (r.data.session) emailCliente = r.data.session.user.email || '';
       if (!r.data.session) {
         alvo.innerHTML = estado('Entre na sua conta', 'Para pagar, entre na conta usada no pedido.', '<a class="botao botao-vinho" href="conta.html">Entrar</a>');
         return;
@@ -1199,10 +1217,18 @@
         ocupado(botao, true, 'Abrindo o pagamento…');
         sb.rpc('set_order_payment', { p_order: o.id, p_choice: forma }).then(function (r) {
           if (r.error) throw r.error;
-          return pagamento({ order_id: o.id }).then(function (cobranca) {
+          return configuracao.then(function (cfg) {
+            if (cfg.publicKey) {
+              ocupado(botao, false);
+              botao.textContent = texto;
+              abrirBrick(o, forma, r.data.total_cents, cfg.publicKey);
+              return;
+            }
+            return pagamento({ order_id: o.id }).then(function (cobranca) {
             if (cobranca.url) { location.href = cobranca.url; return; }
             if (cobranca.disponivel) throw new Error(cobranca.error || 'Não foi possível abrir o pagamento. Tente novamente.');
             whatsapp(o, forma, r.data.total_cents);
+            });
           });
         }).catch(function (falha) {
           ocupado(botao, false);
@@ -1211,6 +1237,126 @@
           erro.hidden = false;
         });
       });
+    }
+    function carregarSdk() {
+      if (window.MercadoPago) return Promise.resolve();
+      return new Promise(function (resolver, rejeitar) {
+        var script = document.createElement('script');
+        script.src = 'https://sdk.mercadopago.com/js/v2';
+        script.onload = resolver;
+        script.onerror = rejeitar;
+        document.head.appendChild(script);
+      });
+    }
+    function fecharBrick() {
+      if (controleBrick) { try { controleBrick.unmount(); } catch (e) {} controleBrick = null; }
+    }
+    function abrirBrick(o, forma, total, chave) {
+      var form = $('#form-pagamento');
+      form.hidden = true;
+      var area = $('#area-brick');
+      if (!area) {
+        form.insertAdjacentHTML('afterend', '<div class="area-brick" id="area-brick"></div>');
+        area = $('#area-brick');
+      }
+      area.hidden = false;
+      area.innerHTML = '<p class="area-brick-titulo">Pagar <strong>' + dinheiro(total) + '</strong> com ' + (forma === 'cartao' ? 'cartão' : FORMAS[forma]) + '</p>' +
+        '<div id="paymentBrick_container"><p class="nota-pequena">Carregando o pagamento…</p></div>' +
+        '<p class="mensagem mensagem-erro" id="erro-brick" role="alert" hidden></p>' +
+        '<button class="botao-texto" type="button" data-trocar-forma>Trocar forma de pagamento</button>';
+      area.querySelector('[data-trocar-forma]').addEventListener('click', function () {
+        fecharBrick();
+        area.hidden = true;
+        form.hidden = false;
+      });
+      carregarSdk().then(function () {
+        var mp = new window.MercadoPago(chave, { locale: 'pt-BR' });
+        $('#paymentBrick_container').innerHTML = '';
+        return mp.bricks().create('payment', 'paymentBrick_container', {
+          initialization: { amount: total / 100, payer: { email: emailCliente } },
+          customization: { paymentMethods: METODOS[forma] },
+          callbacks: {
+            onReady: function () {},
+            onError: function (erro) { console.error(erro); },
+            onSubmit: function (dados) { return enviarPagamento(o, dados); }
+          }
+        });
+      }).then(function (controle) { controleBrick = controle; }, function () {
+        $('#paymentBrick_container').innerHTML = '';
+        erroBrick('Não foi possível carregar o pagamento. Verifique sua conexão e recarregue a página.');
+      });
+    }
+    function erroBrick(texto) {
+      var erro = $('#erro-brick');
+      if (!erro) return;
+      erro.textContent = texto;
+      erro.hidden = false;
+    }
+    function enviarPagamento(o, dados) {
+      $('#erro-brick').hidden = true;
+      return pagamento({
+        order_id: o.id,
+        selectedPaymentMethod: dados.selectedPaymentMethod || dados.paymentMethod,
+        formData: dados.formData
+      }, 'pagar').then(function (res) {
+        if (res.error) { erroBrick(res.error); throw new Error(res.error); }
+        if (res.status === 'rejected') {
+          var motivo = RECUSAS[res.status_detail] || 'O pagamento foi recusado. Tente outro cartão ou outra forma de pagamento.';
+          erroBrick(motivo);
+          throw new Error(motivo);
+        }
+        fecharBrick();
+        mostrarResultado(o, res);
+      });
+    }
+    function mostrarResultado(o, res) {
+      var etiqueta = '<span class="etiqueta">Pedido #' + esc(o.number) + '</span>';
+      var compras = '<a class="botao botao-linha" href="conta.html">Ver minhas compras</a>';
+      window.scrollTo(0, 0);
+      if (res.status === 'approved') {
+        alvo.innerHTML = '<div class="estado estado-sucesso">' + etiqueta + '<h2>Pagamento aprovado</h2>' +
+          '<p>Recebemos o seu pagamento. Você acompanha o pedido em Minhas compras.</p>' + compras + '</div>';
+        return;
+      }
+      if (res.qr_code) {
+        alvo.innerHTML = '<div class="estado pix">' + etiqueta + '<h2>Pague com Pix</h2>' +
+          '<p>Abra o app do seu banco e escaneie o QR Code ou use o código copia e cola.</p>' +
+          (res.qr_code_base64 ? '<img class="pix-qr" src="data:image/png;base64,' + esc(res.qr_code_base64) + '" alt="QR Code do Pix" width="220" height="220">' : '') +
+          '<div class="pix-codigo"><input id="pix-codigo" readonly value="' + esc(res.qr_code) + '" aria-label="Código Pix copia e cola">' +
+          '<button class="botao botao-vinho" type="button" id="copiar-pix">Copiar código</button></div>' +
+          '<p class="nota-pequena" id="pix-status" aria-live="polite">Aguardando o pagamento. Esta página atualiza sozinha.</p>' + compras + '</div>';
+        $('#copiar-pix').addEventListener('click', function () {
+          var campo = $('#pix-codigo');
+          campo.select();
+          (navigator.clipboard ? navigator.clipboard.writeText(campo.value) : Promise.reject()).catch(function () { document.execCommand('copy'); });
+          this.textContent = 'Código copiado';
+        });
+        esperarPix(o, res.id);
+        return;
+      }
+      if (res.boleto_url) {
+        alvo.innerHTML = '<div class="estado estado-sucesso">' + etiqueta + '<h2>Boleto gerado</h2>' +
+          '<p>Pague o boleto até o vencimento. A confirmação pode levar algumas horas depois do pagamento.</p>' +
+          '<a class="botao botao-vinho" href="' + esc(res.boleto_url) + '" target="_blank" rel="noopener">Abrir boleto</a>' + compras + '</div>';
+        return;
+      }
+      alvo.innerHTML = '<div class="estado">' + etiqueta + '<h2>Pagamento em análise</h2>' +
+        '<p>O Mercado Pago está analisando o pagamento. Avisaremos em Minhas compras assim que for confirmado.</p>' + compras + '</div>';
+    }
+    function esperarPix(o, idPagamento) {
+      var tentativas = 0;
+      clearInterval(esperaPix);
+      esperaPix = setInterval(function () {
+        tentativas++;
+        if (tentativas > 300 || !$('#pix-status')) { clearInterval(esperaPix); return; }
+        pagamento({ order_id: o.id, payment_id: idPagamento, consultar: true }, 'pagar').then(function (res) {
+          if (res.status === 'approved') { clearInterval(esperaPix); mostrarResultado(o, res); }
+          if (res.status === 'cancelled' || res.status === 'rejected') {
+            clearInterval(esperaPix);
+            $('#pix-status').textContent = 'Este Pix expirou. Volte a Minhas compras para gerar outro.';
+          }
+        });
+      }, 6000);
     }
     function whatsapp(o, forma, total) {
       var mensagem = 'Olá! Fiz o pedido #' + o.number + ' no site da Ellize Collection.\n\n' +

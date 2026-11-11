@@ -55,7 +55,8 @@ Segredos da função no Supabase: `MELHOR_ENVIO_TOKEN` e `MELHOR_ENVIO_USER_AGEN
 Com `MERCADO_PAGO_ACCESS_TOKEN` e `MERCADO_PAGO_WEBHOOK_SECRET` configurados nas funções do Supabase, o pedido segue para o Checkout Pro. Sem eles, a tela de pagamento leva ao WhatsApp com a forma e o valor escolhidos. O frete também pode ser calculado na página do produto.
 
 - `pagamento.html`: depois de fechar o pedido, o cliente escolhe Pix, cartão ou boleto. A escolha recalcula o pedido no servidor (`set_order_payment`): Pix e boleto usam o valor do Pix, e cartão usa o valor cheio.
-- `supabase/functions/pagamento`: cria a cobrança só com a forma escolhida.
+- `supabase/functions/pagamento`: cria a cobrança só com a forma escolhida, ou devolve a chave pública do Mercado Pago.
+- `supabase/functions/pagar`: com `MERCADO_PAGO_PUBLIC_KEY` configurada, o pagamento acontece na própria tela (Payment Brick). A função cobra sempre o total salvo no pedido, mostra o QR Code do Pix ou o link do boleto e consulta o Pix até a confirmação.
 - `supabase/functions/pagamento-aviso`: recebe o aviso, confere a assinatura e consulta o pagamento no Mercado Pago. Se aprovado, o pedido vira pago e o estoque baixa.
 
 Problemas como peça sem estoque, valor diferente ou pagamento devolvido aparecem em vermelho no pedido do painel. Cancelar no painel não devolve o dinheiro: a devolução é feita no Mercado Pago. No Mercado Pago, o aviso aponta para `https://ukvivmgyxnuijmglidwm.supabase.co/functions/v1/pagamento-aviso`, com o evento Pagamentos. As duas funções são publicadas com a verificação de JWT desligada, porque autenticam por conta própria. Use `SITE_URL` ao trocar de domínio.
