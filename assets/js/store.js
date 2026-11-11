@@ -1335,9 +1335,17 @@
         return;
       }
       if (res.boleto_url) {
-        alvo.innerHTML = '<div class="estado estado-sucesso">' + etiqueta + '<h2>Boleto gerado</h2>' +
+        alvo.innerHTML = '<div class="estado estado-sucesso pix">' + etiqueta + '<h2>Boleto gerado</h2>' +
           '<p>Pague o boleto até o vencimento. A confirmação pode levar algumas horas depois do pagamento.</p>' +
+          (res.linha_digitavel ? '<div class="pix-codigo"><input id="linha-boleto" readonly value="' + esc(res.linha_digitavel) + '" aria-label="Linha digitável do boleto">' +
+          '<button class="botao botao-linha" type="button" id="copiar-boleto">Copiar linha</button></div>' : '') +
           '<a class="botao botao-vinho" href="' + esc(res.boleto_url) + '" target="_blank" rel="noopener">Abrir boleto</a>' + compras + '</div>';
+        if ($('#copiar-boleto')) $('#copiar-boleto').addEventListener('click', function () {
+          var campo = $('#linha-boleto');
+          campo.select();
+          (navigator.clipboard ? navigator.clipboard.writeText(campo.value) : Promise.reject()).catch(function () { document.execCommand('copy'); });
+          this.textContent = 'Linha copiada';
+        });
         return;
       }
       alvo.innerHTML = '<div class="estado">' + etiqueta + '<h2>Pagamento em análise</h2>' +

@@ -1,5 +1,9 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.49.4';
 
+const STATUS_ORDER: Record<string, string> = {
+  processed: 'approved', failed: 'rejected', action_required: 'pending', processing: 'in_process',
+  created: 'pending', canceled: 'cancelled', refunded: 'refunded', charged_back: 'charged_back',
+};
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function resposta(status: number) {
@@ -55,33 +59,52 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
     const corpo = await req.json().catch(() => ({}));
-    const tipo = url.searchParams.get('type') || corpo.type;
+    const tipo = String(url.searchParams.get('type') || corpo.type || '');
     const dataId = url.searchParams.get('data.id') || String(corpo.data?.id || '');
-    if (tipo !== 'payment' || !dataId) return resposta(200);
-    if (!(await assinaturaValida(req, dataId, segredo))) return resposta(401);
+    const ehOrder = tipo === 'order' || tipo === 'orders';
+    if ((tipo !== 'payment' && !ehOrder) || !dataId) return resposta(200);
+    if (!(await assinaturaValida(req, dataId, segredo))) {
+      // O aviso só aponta o que consultar; os dados vêm sempre do Mercado Pago com a nossa chave.
+      // Um aviso de payment sem assinatura válida é recusado. No de order, a regra da assinatura
+      // não está documentada, então a consulta segue e o caso fica registrado.
+      if (!ehOrder) return resposta(401);
+      console.warn('Assinatura do aviso de order não conferiu', dataId);
+    }
 
-    // O aviso só diz qual pagamento olhar. Os dados valem pela consulta ao Mercado Pago.
-    const consulta = await fetch('https://api.mercadopago.com/v1/payments/' + encodeURIComponent(dataId), {
+    // O aviso só diz o que olhar. Os dados valem pela consulta ao Mercado Pago.
+    const consulta = await fetch('https://api.mercadopago.com/v1/' + (ehOrder ? 'orders/' : 'payments/') + encodeURIComponent(dataId), {
       headers: { Authorization: 'Bearer ' + token },
     });
     if (!consulta.ok) {
-      console.error('Consulta do pagamento respondeu', consulta.status);
+      console.error('Consulta respondeu', consulta.status);
       return resposta(500);
     }
-    const pagamento = await consulta.json();
-    if (!UUID.test(pagamento.external_reference || '')) return resposta(200);
+    const dados = await consulta.json();
+    if (!UUID.test(dados.external_reference || '')) return resposta(200);
+
+    let status: string, metodo: string, pagoCentavos: number;
+    if (ehOrder) {
+      const pagamento = dados.transactions?.payments?.[0] || {};
+      status = STATUS_ORDER[dados.status] || String(dados.status);
+      metodo = formaPagamento(String(pagamento.payment_method?.type || ''), '');
+      pagoCentavos = Math.round(Number(dados.total_paid_amount || pagamento.paid_amount || pagamento.amount || 0) * 100);
+    } else {
+      status = String(dados.status);
+      metodo = formaPagamento(String(dados.payment_type_id), String(dados.payment_method_id));
+      pagoCentavos = Math.round(Number(dados.transaction_amount) * 100);
+    }
 
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-    const { data: pedido } = await admin.from('orders').select('cep').eq('id', pagamento.external_reference).maybeSingle();
+    const { data: pedido } = await admin.from('orders').select('cep').eq('id', dados.external_reference).maybeSingle();
     if (!pedido) return resposta(200);
 
-    const local = pagamento.status === 'approved' ? await cidadeDoCep(pedido.cep) : { city: null, state: null };
+    const local = status === 'approved' ? await cidadeDoCep(pedido.cep) : { city: null, state: null };
     const { error } = await admin.rpc('mp_register_payment', {
-      p_order: pagamento.external_reference,
-      p_payment_id: String(pagamento.id),
-      p_status: String(pagamento.status),
-      p_method: formaPagamento(String(pagamento.payment_type_id), String(pagamento.payment_method_id)),
-      p_amount_cents: Math.round(Number(pagamento.transaction_amount) * 100),
+      p_order: dados.external_reference,
+      p_payment_id: String(dados.id),
+      p_status: status,
+      p_method: metodo,
+      p_amount_cents: pagoCentavos,
       p_city: local.city,
       p_state: local.state,
     });
