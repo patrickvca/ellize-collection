@@ -295,51 +295,94 @@
     if (alvo < totalFixas() || alvo >= categorias.length) return;
     var movida = categorias.splice(i, 1)[0];
     categorias.splice(alvo, 0, movida);
+    var antes = posicoesDasLinhas();
     desenharCategorias();
+    deslizarLinhas(antes);
     var seletor = sentido < 0 ? '[data-subir="' : '[data-descer="';
     var botao = $(seletor + slug + '"]');
-    if (botao && !botao.disabled) botao.focus();
+    if (botao) {
+      botao.classList.add(sentido < 0 ? 'seta-saltou-cima' : 'seta-saltou-baixo');
+      if (!botao.disabled) botao.focus();
+    }
     salvarOrdem();
+  }
+  /* A lista é redesenhada; cada linha parte da posição antiga e desliza até a nova. */
+  function posicoesDasLinhas() {
+    var posicoes = {};
+    document.querySelectorAll('#lista-categorias .categoria').forEach(function (linha) {
+      posicoes[linha.dataset.slug] = linha.getBoundingClientRect().top;
+    });
+    return posicoes;
+  }
+  function deslizarLinhas(antes, ignorar) {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    document.querySelectorAll('#lista-categorias .categoria').forEach(function (linha) {
+      if (linha === ignorar) return;
+      var distancia = antes[linha.dataset.slug] - linha.getBoundingClientRect().top;
+      if (!distancia) return;
+      linha.animate([{ transform: 'translateY(' + distancia + 'px)' }, { transform: 'translateY(0)' }],
+        { duration: 320, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' });
+    });
   }
   function salvarOrdem() {
     sb.rpc('admin_reorder_categories', { p_slugs: categorias.map(function (c) { return c.slug; }) }).then(function (r) {
       if (r.error) { avisar('Não foi possível salvar a ordem.'); carregarCategorias(); }
     });
   }
-  /* A linha arrastada fica no lugar e as vizinhas trocam com ela, para o navegador não perder o ponteiro. */
-  var linhaArrastada = null;
+  /* A linha segue o ponteiro; as vizinhas trocam de lugar na lista e deslizam para abrir espaço. */
+  var arrasto = null;
   $('#lista-categorias').addEventListener('pointerdown', function (evento) {
-    if (!evento.target.closest('[data-arrastar]')) return;
+    var alca = evento.target.closest('[data-arrastar]');
+    if (!alca) return;
     evento.preventDefault();
-    linhaArrastada = evento.target.closest('.categoria');
-    linhaArrastada.classList.add('arrastando');
+    var linha = alca.closest('.categoria');
+    arrasto = { linha: linha, inicioY: evento.pageY, topoInicial: linha.offsetTop };
+    try { alca.setPointerCapture(evento.pointerId); } catch (e) {}
+    linha.classList.add('arrastando');
+    document.body.classList.add('arrastando-categoria');
   });
   document.addEventListener('pointermove', function (evento) {
-    if (!linhaArrastada) return;
-    var caixa = linhaArrastada.parentNode;
-    var antes = linhaArrastada.previousElementSibling;
-    var depois = linhaArrastada.nextElementSibling;
-    while (antes && !antes.hasAttribute('data-fixa') && evento.clientY < antes.getBoundingClientRect().top + antes.offsetHeight / 2) {
-      caixa.insertBefore(antes, linhaArrastada.nextElementSibling);
-      antes = linhaArrastada.previousElementSibling;
+    if (!arrasto) return;
+    var linha = arrasto.linha;
+    var caixa = linha.parentNode;
+    var topo = arrasto.topoInicial + evento.pageY - arrasto.inicioY;
+    var centro = topo + linha.offsetHeight / 2;
+    var posicoes = posicoesDasLinhas();
+    var trocou = false;
+    var antes = linha.previousElementSibling;
+    var depois = linha.nextElementSibling;
+    while (antes && !antes.hasAttribute('data-fixa') && centro < antes.offsetTop + antes.offsetHeight / 2) {
+      caixa.insertBefore(antes, linha.nextElementSibling);
+      antes = linha.previousElementSibling;
+      trocou = true;
     }
-    while (depois && evento.clientY > depois.getBoundingClientRect().top + depois.offsetHeight / 2) {
-      caixa.insertBefore(depois, linhaArrastada);
-      depois = linhaArrastada.nextElementSibling;
+    while (depois && centro > depois.offsetTop + depois.offsetHeight / 2) {
+      caixa.insertBefore(depois, linha);
+      depois = linha.nextElementSibling;
+      trocou = true;
     }
+    var primeiraLivre = caixa.querySelector('.categoria:not([data-fixa])');
+    var ultima = caixa.lastElementChild;
+    topo = Math.max(primeiraLivre.offsetTop, Math.min(topo, ultima.offsetTop + ultima.offsetHeight - linha.offsetHeight));
+    linha.style.transform = 'translateY(' + (topo - linha.offsetTop) + 'px)';
+    if (trocou) deslizarLinhas(posicoes, linha);
+    if (evento.clientY < 70) window.scrollBy(0, -12);
+    else if (evento.clientY > window.innerHeight - 70) window.scrollBy(0, 12);
   });
   function soltarCategoria(evento) {
-    if (!linhaArrastada) return;
-    var linhas = linhaArrastada.parentNode.children;
-    linhaArrastada.classList.remove('arrastando');
-    linhaArrastada = null;
-    var ordem = [].map.call(linhas, function (l) { return l.dataset.slug; });
+    if (!arrasto) return;
+    var linha = arrasto.linha;
+    arrasto = null;
+    document.body.classList.remove('arrastando-categoria');
+    var ordem = [].map.call(linha.parentNode.children, function (l) { return l.dataset.slug; });
     var mudou = ordem.some(function (slug, i) { return slug !== categorias[i].slug; });
+    var posicoes = posicoesDasLinhas();
     if (evento.type === 'pointerup' && mudou) {
       categorias.sort(function (a, b) { return ordem.indexOf(a.slug) - ordem.indexOf(b.slug); });
       salvarOrdem();
     }
     desenharCategorias();
+    deslizarLinhas(posicoes);
   }
   document.addEventListener('pointerup', soltarCategoria);
   document.addEventListener('pointercancel', soltarCategoria);

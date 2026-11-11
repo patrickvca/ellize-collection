@@ -207,7 +207,8 @@ ul { margin: 0; padding: 0; list-style: none; }
 .valor-menos { color: var(--erro); }
 .categoria { grid-template-columns: auto auto auto minmax(0, 1fr) auto auto auto; }
 .categoria-alca { padding: 0.5rem 0.25rem; color: var(--tinta-suave); font-size: 1.25rem; line-height: 1; cursor: grab; touch-action: none; user-select: none; }
-.categoria.arrastando { position: relative; z-index: 1; box-shadow: 0 8px 20px rgb(44 7 10 / 0.18); }
+.categoria.arrastando { position: relative; z-index: 2; scale: 1.02; box-shadow: 0 16px 32px rgb(44 7 10 / 0.24); cursor: grabbing; }
+body.arrastando-categoria, body.arrastando-categoria * { cursor: grabbing !important; user-select: none; }
 .categoria.arrastando .categoria-alca { cursor: grabbing; }
 .categoria-capa { position: relative; display: grid; place-items: center; width: 48px; height: 60px; overflow: hidden; border: 1px dashed var(--linha); border-radius: var(--raio-s); color: var(--tinta-suave); font-size: 0.75rem; cursor: pointer; }
 .categoria-capa:hover, .categoria-capa:focus-within { border-color: var(--vinho); }
@@ -219,3 +220,13 @@ ul { margin: 0; padding: 0; list-style: none; }
 .categoria-trava { grid-column: 1 / span 2; justify-self: start; padding: 0.125rem 0.5rem; border-radius: var(--raio-pill); background: var(--vinho); color: var(--creme); font-size: 0.75rem; }
 .categoria-nome { font-weight: 600; padding-inline: 0.75rem; }
 @media (max-width: 639.98px) { .categoria-trava { grid-column: 1 / span 2; } }
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes seta-cima { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+  @keyframes seta-baixo { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
+  @keyframes seta-salto-cima { 0% { transform: translateY(0); } 40% { transform: translateY(-7px); } 100% { transform: translateY(0); } }
+  @keyframes seta-salto-baixo { 0% { transform: translateY(0); } 40% { transform: translateY(7px); } 100% { transform: translateY(0); } }
+  .categoria-ordem [data-subir]:not(:disabled):hover, .categoria-ordem [data-subir]:not(:disabled):focus-visible { animation: seta-cima 0.7s ease-in-out infinite; }
+  .categoria-ordem [data-descer]:not(:disabled):hover, .categoria-ordem [data-descer]:not(:disabled):focus-visible { animation: seta-baixo 0.7s ease-in-out infinite; }
+  .categoria-ordem .seta-saltou-cima { animation: seta-salto-cima 0.35s ease-out; }
+  .categoria-ordem .seta-saltou-baixo { animation: seta-salto-baixo 0.35s ease-out; }
+}
