@@ -110,7 +110,7 @@
     ] },
     { id: 'loja-fisica', rotulo: 'Loja física', colunas: [
       ['Visite', [['Endereço e contatos', inicio + '#loja'], ['Como chegar', MAPA, true]]],
-      ['Fale com a gente', [['WhatsApp', CONFIG.whatsapp, true], ['E-mail', 'mailto:lookpremium96@gmail.com']]]
+      ['Fale com a gente', [['WhatsApp', CONFIG.whatsapp, true], ['E-mail', 'mailto:ellizecollection@gmail.com']]]
     ] }
   ];
   function htmlMenu() {
@@ -157,7 +157,7 @@
     '<li><a href="' + inicio + '#marca">A marca</a></li><li><a href="' + inicio + '#loja">Loja física</a></li><li><a href="conta.html">Minha conta</a></li><li><a href="politicas.html">Trocas e devoluções</a></li></ul></nav>' +
     '<div><h2>Contato</h2><ul><li><a href="' + CONFIG.whatsapp + '" target="_blank" rel="noopener">WhatsApp</a></li>' +
     '<li><a href="' + INSTAGRAM + '" target="_blank" rel="noopener">Instagram</a></li>' +
-    '<li><a href="mailto:lookpremium96@gmail.com">E-mail</a></li></ul></div></div>' +
+    '<li><a href="mailto:ellizecollection@gmail.com">E-mail</a></li></ul></div></div>' +
     '<p class="rodape-base">© 2026 Ellize Collection. Todos os direitos reservados.</p></div></footer>' +
     '<a class="fab" href="' + CONFIG.whatsapp + '?text=Ol%C3%A1!%20Vim%20pelo%20site%20da%20Ellize%20Collection." target="_blank" rel="noopener" aria-label="Falar pelo WhatsApp">' + icone('i-whatsapp') + '</a>';
 
