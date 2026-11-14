@@ -1,6 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.49.4';
 
-const SITE_PADRAO = 'https://patrickvca.github.io/ellize-collection';
+const SITE_PADRAO = 'https://ellizecollection.com.br';
 const SO_PIX = ['credit_card', 'debit_card', 'prepaid_card', 'ticket', 'atm'];
 const SO_CARTAO = ['bank_transfer', 'ticket', 'atm'];
 const SO_BOLETO = ['credit_card', 'debit_card', 'prepaid_card', 'bank_transfer', 'atm'];

@@ -77,6 +77,6 @@ Cada conta salva até 20 endereços em `customer_addresses`, com um padrão. Em 
 
 Ao alterar CSS ou JS, troque o `?v=` nas páginas HTML para o navegador não misturar versões.
 
-O site está no GitHub Pages: https://patrickvca.github.io/ellize-collection/
+O site está no GitHub Pages, com o domínio https://ellizecollection.com.br (arquivo `CNAME`). O endereço https://patrickvca.github.io/ellize-collection/ redireciona para ele.
 
 Ao trocar de domínio, atualize `canonical`, `og:url`, `og:image` e os dados estruturados em `index.html`.
