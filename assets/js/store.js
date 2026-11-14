@@ -558,6 +558,14 @@
       $('#form-pedido').addEventListener('change', function (evento) {
         if (evento.target.id === 'usar-credito') atualizarTotais();
       });
+      sb.from('orders').select('customer_name, phone').eq('user_id', sessao.user.id)
+        .order('created_at', { ascending: false }).limit(1).then(function (r) {
+          var ultimo = !r.error && r.data && r.data[0];
+          var form = $('#form-pedido');
+          if (!ultimo || !form) return;
+          if (ultimo.customer_name && form.nome.value === form.nome.defaultValue) form.nome.value = ultimo.customer_name;
+          if (!form.telefone.value && ultimo.phone) form.telefone.value = ultimo.phone;
+        });
       sb.from('customer_addresses').select('*').order('is_default', { ascending: false }).order('created_at').then(function (r) {
         if (r.error || !r.data.length) return;
         enderecos = r.data;
