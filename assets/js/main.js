@@ -93,8 +93,8 @@
   /* Barra e rodapé: uma única versão para todas as páginas */
   var MENU = [
     { id: 'novidades', rotulo: 'Novidades', vitrine: true, colunas: [
-      ['Categorias', [['Ver todas', 'loja.html'], ['Promoções', 'loja.html?c=promocao'], ['Feminino', 'loja.html?c=feminino'], ['Masculino', 'loja.html?c=masculino'],
-        ['Conjuntos', 'loja.html?c=conjuntos'], ['Vestidos', 'loja.html?c=vestidos'], ['Bolsas', 'loja.html?c=bolsas']]]
+      ['Comprar por', [['Ver todas', 'loja.html'], ['Promoções', 'loja.html?c=promocao'], ['Feminino', 'loja.html?c=feminino'], ['Masculino', 'loja.html?c=masculino']]],
+      ['Categorias', [['Conjuntos', 'loja.html?c=conjuntos'], ['Vestidos', 'loja.html?c=vestidos'], ['Bolsas', 'loja.html?c=bolsas']]]
     ] },
     { id: 'colecoes', rotulo: 'Coleções', colunas: [
       ['Feminino', [['Ver tudo', 'loja.html?c=feminino'], ['Conjuntos', 'loja.html?c=feminino,conjuntos'], ['Vestidos', 'loja.html?c=feminino,vestidos'], ['Bolsas', 'loja.html?c=feminino,bolsas']]],
@@ -447,8 +447,7 @@
       var capa = c.image && document.querySelector('.colecoes-grade a[href="loja.html?c=' + c.slug + '"] img');
       if (capa) capa.src = c.image;
     });
-    trocarLinks('Categorias', linkCategoria('Ver todas') + linkCategoria('Promoções', 'promocao') +
-      cats.map(function (c) { return linkCategoria(c.name, c.slug); }).join(''));
+    trocarLinks('Categorias', outras.map(function (c) { return linkCategoria(c.name, c.slug); }).join(''));
     DEPARTAMENTOS.forEach(function (slug) {
       var departamento = cats.filter(function (c) { return c.slug === slug; })[0];
       var titulo = slug === 'feminino' ? 'Feminino' : 'Masculino';
