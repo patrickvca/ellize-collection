@@ -204,14 +204,14 @@ section[id] { scroll-margin-top: calc(var(--header-h) + 24px); }
 .ornamento { width: 100%; max-width: 280px; height: 18px; color: var(--vinho); }
 
 /* Instagram */
-.faixa-insta {
+.faixa-insta-antiga {
   position: relative; isolation: isolate; overflow: hidden;
   padding-block: var(--secao); background: var(--vinho-profundo);
   color: var(--creme); text-align: center;
 }
-.faixa-insta > img { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; object-fit: cover; }
-.faixa-insta .container { display: grid; justify-items: center; gap: 1.25rem; }
-.faixa-insta h2 { overflow-wrap: anywhere; }
+.faixa-insta-antiga > img { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; object-fit: cover; }
+.faixa-insta-antiga .container { display: grid; justify-items: center; gap: 1.25rem; }
+.faixa-insta-antiga h2 { overflow-wrap: anywhere; }
 .arroba { font-family: var(--sans); font-size: 0.82em; }
 
 /* Loja */
@@ -302,3 +302,23 @@ section[id] { scroll-margin-top: calc(var(--header-h) + 24px); }
   .js .revelar { opacity: 1; transform: none; }
   .painel:hover img { transform: none; }
 }
+
+/* Banner do Instagram: a faixa inteira leva ao perfil */
+.insta-banner {
+  position: relative; isolation: isolate; overflow: hidden;
+  padding-block: clamp(3.5rem, 2.5rem + 4vw, 6rem);
+  background:
+    radial-gradient(ellipse at 85% 20%, rgb(214 41 118 / 0.35), transparent 55%),
+    radial-gradient(ellipse at 10% 90%, rgb(250 126 30 / 0.18), transparent 50%),
+    linear-gradient(135deg, var(--vinho-profundo), var(--vinho) 60%, #8f1d3a);
+  color: var(--creme);
+}
+.insta-link { display: grid; justify-items: center; color: inherit; text-align: center; text-decoration: none; }
+.insta-texto { display: grid; justify-items: center; gap: 1.25rem; }
+.insta-perfil { display: inline-flex; align-items: center; gap: 0.75rem; font-size: 1.0625rem; font-weight: 600; letter-spacing: 0.02em; }
+.insta-avatar { display: grid; place-items: center; width: 64px; height: 64px; padding: 3px; border-radius: 50%; background: linear-gradient(45deg, #feda75, #fa7e1e, #d62976, #962fbf, #4f5bd5); }
+.insta-avatar img { width: 100%; height: 100%; padding: 14px 8px; border: 3px solid var(--vinho-profundo); border-radius: 50%; background: var(--vinho-profundo); object-fit: contain; }
+.insta-banner h2 { font-size: clamp(2.25rem, 1.4rem + 3vw, 3.75rem); font-style: italic; line-height: 1.05; }
+.insta-texto p { max-width: 40ch; color: rgb(244 241 232 / 0.85); }
+.insta-link:hover .insta-botao { background: #fff; }
+.insta-link:focus-visible { outline: 2px solid var(--creme); outline-offset: 8px; border-radius: var(--raio-m); }

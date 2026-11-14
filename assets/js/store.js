@@ -163,6 +163,7 @@
     var titulo = busca ? 'Resultados para "' + busca + '"'
       : pedidas.length ? pedidas.map(function (t) { return NOMES[t]; }).join(' · ') : 'Novidades';
     var filtroAtual = !busca && pedidas.length < 2 ? (pedidas[0] || '') : null;
+    window.Ellize.registrarVisita(pedidas);
     var lista = [];
     var mapa = {};
     var grade = $('#produtos');
@@ -242,6 +243,7 @@
       var p = resposta.data;
       if (!p) { alvo.innerHTML = naoAchou; return; }
       document.title = p.name + ' | Ellize Collection';
+      window.Ellize.registrarVisita(p.tags);
       var categoria = p.tags.filter(function (t) { return NOMES[t]; }).pop();
       $('#trilha').innerHTML = trilha([['Início', 'index.html'], ['Novidades', 'loja.html']]
         .concat(categoria ? [[NOMES[categoria], 'loja.html?c=' + categoria]] : []).concat([[p.name]]));

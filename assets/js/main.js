@@ -61,6 +61,22 @@
     return catalogo;
   }
   var listaCategorias = null;
+  /* Uma visita por categoria e por sessão, para o menu Destaques */
+  function registrarVisita(slugs) {
+    var vistas = [];
+    try { vistas = JSON.parse(sessionStorage.getItem('ellize:visitas')) || []; } catch (e) {}
+    var novas = (slugs || []).filter(function (s, i, todas) {
+      return s && ['feminino', 'masculino', 'promocao'].indexOf(s) === -1 && vistas.indexOf(s) === -1 && todas.indexOf(s) === i;
+    }).slice(0, 5);
+    if (!novas.length) return;
+    try { sessionStorage.setItem('ellize:visitas', JSON.stringify(vistas.concat(novas))); } catch (e) {}
+    fetch(CONFIG.url + '/rest/v1/rpc/register_category_visit', {
+      method: 'POST',
+      keepalive: true,
+      headers: { apikey: CONFIG.chave, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_slugs: novas })
+    }).catch(function () {});
+  }
   function categorias() {
     if (!listaCategorias) {
       listaCategorias = fetch(CONFIG.url + '/rest/v1/categories?select=*&order=position', {
@@ -291,7 +307,7 @@
 
   window.Ellize = {
     config: CONFIG, esc: esc, dinheiro: dinheiro, icone: icone,
-    produtos: produtos, categorias: categorias, sugestoes: sugestoes, adicionar: adicionar,
+    produtos: produtos, categorias: categorias, sugestoes: sugestoes, adicionar: adicionar, registrarVisita: registrarVisita,
     preco: preco, precoPix: precoPix, emPromocao: emPromocao, estoque: estoque, esgotado: esgotado, precoHTML: precoHTML,
     cores: cores, temCores: temCores, estoqueCor: estoqueCor, estoqueTamanho: estoqueTamanho, corHex: corHex, variacao: variacao, fotoCor: fotoCor
   };
@@ -452,14 +468,29 @@
       var departamento = cats.filter(function (c) { return c.slug === slug; })[0];
       var titulo = slug === 'feminino' ? 'Feminino' : 'Masculino';
       if (!departamento) { trocarLinks(titulo, ''); return; }
-      var comPecas = outras.filter(function (c) {
+      // Categoria do departamento aparece sempre; "ambos" só quando já tem peças dele.
+      var doDepartamento = outras.filter(function (c) {
+        var dep = c.department || 'ambos';
+        if (dep === slug) return true;
+        if (dep !== 'ambos') return false;
         return pecas.some(function (p) { return p.tags.indexOf(slug) !== -1 && p.tags.indexOf(c.slug) !== -1; });
       });
-      trocarLinks(titulo, linkCategoria('Ver tudo', slug) + comPecas.map(function (c) {
+      trocarLinks(titulo, linkCategoria('Ver tudo', slug) + doDepartamento.map(function (c) {
         return linkCategoria(c.name, slug + ',' + c.slug);
       }).join(''));
     });
-    trocarLinks('Mais procurados', outras.map(function (c) { return linkCategoria(c.name, c.slug); }).join(''));
+    trocarLinks('Mais procurados', outras.slice(0, 3).map(function (c) { return linkCategoria(c.name, c.slug); }).join(''));
+    fetch(CONFIG.url + '/rest/v1/rpc/top_categories', {
+      method: 'POST',
+      headers: { apikey: CONFIG.chave, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_limit: 3 })
+    }).then(function (r) { return r.ok ? r.json() : []; }).then(function (maisVistas) {
+      var escolhidas = (maisVistas || []).map(function (v) {
+        return outras.filter(function (c) { return c.slug === v.slug; })[0];
+      }).filter(Boolean);
+      outras.forEach(function (c) { if (escolhidas.length < 3 && escolhidas.indexOf(c) === -1) escolhidas.push(c); });
+      trocarLinks('Mais procurados', escolhidas.slice(0, 3).map(function (c) { return linkCategoria(c.name, c.slug); }).join(''));
+    }).catch(function () {});
     var sugestoesBusca = busca.querySelector('.busca-sugestoes');
     sugestoesBusca.querySelectorAll('a').forEach(function (a) { a.remove(); });
     sugestoesBusca.insertAdjacentHTML('beforeend', outras.slice(0, 3).map(function (c) { return linkCategoria(c.name, c.slug); }).join(''));

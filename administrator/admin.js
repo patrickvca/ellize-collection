@@ -265,6 +265,10 @@
         '<button class="fechar" type="button" data-descer="' + esc(c.slug) + '" aria-label="Mover ' + esc(c.name) + ' para baixo"' + (i === categorias.length - 1 ? ' disabled' : '') + '>↓</button></div>' +
         capaHTML +
         '<input data-nome="' + esc(c.slug) + '" value="' + esc(c.name) + '" maxlength="40" aria-label="Nome da categoria">' +
+        '<select class="categoria-departamento" data-departamento="' + esc(c.slug) + '" aria-label="Departamento de ' + esc(c.name) + '">' +
+        [['ambos', 'Feminino e masculino'], ['feminino', 'Feminino'], ['masculino', 'Masculino']].map(function (d) {
+          return '<option value="' + d[0] + '"' + ((c.department || 'ambos') === d[0] ? ' selected' : '') + '>' + d[1] + '</option>';
+        }).join('') + '</select>' +
         '<span class="categoria-total">' + total + (total === 1 ? ' produto' : ' produtos') + '</span>' +
         tirarCapaHTML +
         '<button class="botao-texto botao-perigo" type="button" data-tirar-categoria="' + esc(c.slug) + '">Remover</button></li>';
@@ -426,6 +430,20 @@
     });
   });
   $('#lista-categorias').addEventListener('change', function (evento) {
+    if (evento.target.matches('[data-departamento]')) {
+      var campoDep = evento.target;
+      var categoriaDep = categorias.filter(function (c) { return c.slug === campoDep.dataset.departamento; })[0];
+      sb.from('categories').update({ department: campoDep.value }).eq('slug', categoriaDep.slug).select().then(function (r) {
+        if (r.error || !r.data.length) {
+          campoDep.value = categoriaDep.department || 'ambos';
+          avisar('Não foi possível salvar o departamento.');
+          return;
+        }
+        categoriaDep.department = campoDep.value;
+        avisar('Departamento salvo.');
+      });
+      return;
+    }
     if (evento.target.matches('[data-capa]')) {
       var alvoCapa = categorias.filter(function (c) { return c.slug === evento.target.dataset.capa; })[0];
       var arquivoCapa = evento.target.files[0];
