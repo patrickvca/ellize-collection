@@ -109,7 +109,7 @@
   /* Barra e rodapé: uma única versão para todas as páginas */
   var MENU = [
     { id: 'novidades', rotulo: 'Novidades', vitrine: true, colunas: [
-      ['Comprar por', [['Ver todas', 'loja.html'], ['Promoções', 'loja.html?c=promocao'], ['Feminino', 'loja.html?c=feminino'], ['Masculino', 'loja.html?c=masculino']]],
+      ['Comprar por', [['Ver todas', 'loja.html'], ['Feminino', 'loja.html?c=feminino'], ['Masculino', 'loja.html?c=masculino']]],
       ['Categorias', [['Conjuntos', 'loja.html?c=conjuntos'], ['Vestidos', 'loja.html?c=vestidos'], ['Bolsas', 'loja.html?c=bolsas']]]
     ] },
     { id: 'colecoes', rotulo: 'Coleções', colunas: [
