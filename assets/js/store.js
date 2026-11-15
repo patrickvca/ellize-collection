@@ -425,6 +425,7 @@
       $('#linha-frete').hidden = !escolhida;
       $('#valor-frete').textContent = valorFrete() ? dinheiro(valorFrete()) : 'Grátis';
       if ($('#campo-endereco')) $('#campo-endereco').hidden = !escolhida || escolhida.kind === 'retirada';
+      if ($('#campo-cpf')) $('#campo-cpf').hidden = !escolhida || escolhida.kind !== 'correios';
       $('#total').textContent = dinheiro(cartao);
       $('#total-pix').textContent = dinheiro(pix);
       $('#linha-pix').hidden = pix >= cartao;
@@ -474,6 +475,16 @@
     function textoEndereco(form) {
       return [form.rua.value, form.numero.value, form.complemento.value, form.bairro.value, form.cidade.value + ' - ' + form.estado.value]
         .map(function (parte) { return parte.trim(); }).filter(Boolean).join(', ');
+    }
+    function cpfValido(valor) {
+      var d = String(valor || '').replace(/\D/g, '');
+      if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+      for (var t = 9; t < 11; t++) {
+        var soma = 0;
+        for (var i = 0; i < t; i++) soma += +d[i] * (t + 1 - i);
+        if ((soma * 10 % 11) % 10 !== +d[t]) return false;
+      }
+      return true;
     }
     function campoFaltando(form) {
       return [form.rua, form.numero, form.bairro].filter(function (campo) { return !campo.value.trim(); })[0];
@@ -545,6 +556,8 @@
         '<form id="form-pedido" class="formulario" novalidate>' +
         '<label class="campo">Nome completo<input name="nome" autocomplete="name" required minlength="2" maxlength="120" value="' + esc(meta.full_name || meta.name || '') + '"></label>' +
         '<label class="campo">Telefone com DDD<input name="telefone" type="tel" autocomplete="tel" inputmode="tel" required maxlength="20"></label>' +
+        '<label class="campo" id="campo-cpf" hidden>CPF<input name="cpf" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="000.000.000-00">' +
+        '<span class="nota-pequena">Os Correios pedem o CPF de quem recebe na etiqueta.</span></label>' +
         '<fieldset class="endereco" id="campo-endereco" hidden><legend>Endereço de entrega</legend>' +
         '<label class="campo">Rua<input name="rua" autocomplete="address-line1" maxlength="120"></label>' +
         '<div class="endereco-linha endereco-numero"><label class="campo">Número<input name="numero" inputmode="text" maxlength="10"></label>' +
@@ -562,13 +575,19 @@
       $('#form-pedido').addEventListener('change', function (evento) {
         if (evento.target.id === 'usar-credito') atualizarTotais();
       });
-      sb.from('orders').select('customer_name, phone').eq('user_id', sessao.user.id)
+      $('#form-pedido').cpf.addEventListener('input', function (evento) {
+        var d = evento.target.value.replace(/\D/g, '').slice(0, 11);
+        evento.target.value = d.replace(/^(\d{3})(\d)/, '$1.$2').replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d{1,2})$/, '.$1-$2');
+        evento.target.setCustomValidity('');
+      });
+      sb.from('orders').select('customer_name, phone, cpf').eq('user_id', sessao.user.id)
         .order('created_at', { ascending: false }).limit(1).then(function (r) {
           var ultimo = !r.error && r.data && r.data[0];
           var form = $('#form-pedido');
           if (!ultimo || !form) return;
           if (ultimo.customer_name && form.nome.value === form.nome.defaultValue) form.nome.value = ultimo.customer_name;
           if (!form.telefone.value && ultimo.phone) form.telefone.value = ultimo.phone;
+          if (!form.cpf.value && ultimo.cpf) form.cpf.value = ultimo.cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
         });
       sb.from('customer_addresses').select('*').order('is_default', { ascending: false }).order('created_at').then(function (r) {
         if (r.error || !r.data.length) return;
@@ -634,6 +653,12 @@
         faltando.focus();
         return;
       }
+      if (entrega.kind === 'correios' && !cpfValido(form.cpf.value)) {
+        erro.textContent = 'Informe um CPF válido. Os Correios pedem o CPF de quem recebe.';
+        erro.hidden = false;
+        form.cpf.focus();
+        return;
+      }
       ocupado(botao, true, 'Enviando pedido…');
       sb.rpc('create_order', {
         p_items: linhas.map(function (i) { return { product_id: i.id, color: i.color, size: i.size, quantity: i.qty }; }),
@@ -643,7 +668,14 @@
         p_quote: entrega.id,
         p_use_credit: usandoCredito(),
         p_address: entrega.kind === 'retirada' ? null : textoEndereco(form),
-        p_note: form.nota.value
+        p_note: form.nota.value,
+        p_extra: {
+          cpf: entrega.kind === 'correios' ? form.cpf.value : null,
+          address: entrega.kind === 'retirada' ? null : {
+            street: form.rua.value, number: form.numero.value, complement: form.complemento.value,
+            district: form.bairro.value, city: form.cidade.value, state: form.estado.value
+          }
+        }
       }).then(function (resposta) {
         if (resposta.error) {
           ocupado(botao, false);

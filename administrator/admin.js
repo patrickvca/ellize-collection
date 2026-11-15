@@ -955,17 +955,132 @@
         '<p>' + (o.delivery === 'retirada' ? 'Retirar na loja'
           : esc(o.shipping_service || 'Receber em casa') + (o.shipping_cents ? ' · frete ' + dinheiro(o.shipping_cents) : '') +
             (o.shipping_days ? ' · até ' + esc(o.shipping_days) + ' dias' : '') + ': ' + esc(o.address || '') + (o.cep ? ' · CEP ' + esc(o.cep) : '')) + '</p>' +
+        (o.cpf ? '<p>CPF: ' + esc(o.cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4')) + '</p>' : '') +
         (o.credit_cents ? '<p>Crédito usado: ' + dinheiro(o.credit_cents) + '</p>' : '') +
         (o.note ? '<p>Observação: ' + esc(o.note) + '</p>' : '') +
+        etiquetaHTML(o) +
         (o.stock_deducted && (o.delivery === 'correios' || o.delivery === 'envio') && o.status !== 'cancelado' && o.status !== 'entregue'
           ? '<form class="rastreio-form" data-rastreio="' + esc(o.id) + '"><input name="codigo" value="' + esc(o.tracking_code || '') + '" maxlength="40" placeholder="Código de rastreio" aria-label="Código de rastreio do pedido ' + esc(o.number) + '">' +
             '<button class="botao-texto" type="submit">Salvar rastreio</button></form>'
           : (o.tracking_code ? '<p>Rastreio: ' + esc(o.tracking_code) + '</p>' : '')) +
         '<ul class="pedido-itens">' + o.order_items.map(function (i) {
           return '<li>' + i.quantity + 'x ' + esc(i.product_name) + ' (' + variacaoItem(i) + ') · ' + dinheiro(i.unit_price_cents) + '</li>';
-        }).join('') + '</ul>' + acoes + '</li>';
+        }).join('') + '</ul>' + acoes +
+        '<a class="botao botao-linha botao-whatsapp" href="' + esc(whatsapp + '?text=' + encodeURIComponent(mensagemWhatsapp(o))) + '" target="_blank" rel="noopener">Avisar no WhatsApp</a></li>';
     }).join('') + '</ul>';
   }
+
+  /* Mensagem pronta para o cliente, conforme o andamento do pedido */
+  var LOJA_ENDERECO = 'Rua Miguel Pinheiro, 968, Boa Vista, Vitória da Conquista';
+  function mensagemWhatsapp(o) {
+    var nome = String(o.customer_name || '').trim().split(/\s+/)[0];
+    var ola = 'Olá' + (nome ? ', ' + nome : '') + '! Aqui é da Ellize Collection. ';
+    var pedido = 'pedido #' + o.number;
+    if (o.status === 'cancelado') return ola + 'Seu ' + pedido + ' foi cancelado. Se tiver alguma dúvida, é só responder esta mensagem.';
+    if (o.status === 'entregue') return ola + 'Seu ' + pedido + ' foi entregue. Esperamos que você ame as peças! Qualquer coisa, estamos por aqui.';
+    if (o.status === 'enviado') {
+      return ola + 'Seu ' + pedido + ' saiu para entrega' + (o.tracking_code ? '. Código de rastreio: ' + o.tracking_code +
+        '. Acompanhe em https://rastreamento.correios.com.br/app/index.php ou em Minhas compras: https://ellizecollection.com.br/conta.html' : '.');
+    }
+    if (o.status === 'pago') {
+      if (o.delivery === 'retirada') return ola + 'O pagamento do ' + pedido + ' foi confirmado e ele já pode ser retirado na loja: ' + LOJA_ENDERECO + '.';
+      if (o.delivery === 'local') return ola + 'O pagamento do ' + pedido + ' foi confirmado. Já estamos separando suas peças e combinamos a entrega por aqui.';
+      return ola + 'O pagamento do ' + pedido + ' foi confirmado. Já estamos separando suas peças e avisamos quando for postado nos Correios.';
+    }
+    return ola + 'Recebemos seu ' + pedido + ' no valor de ' + dinheiro(o.total_cents) + '. Assim que o pagamento for confirmado, avisamos por aqui.';
+  }
+
+  /* Etiqueta do Melhor Envio */
+  function pacotePadrao(o) {
+    var pecas = (o.order_items || []).reduce(function (s, i) { return s + i.quantity; }, 0) || 1;
+    return o.package || { altura: 5 + 3 * pecas, largura: 25, comprimento: 30, peso: Math.round(0.3 * pecas * 100) / 100 };
+  }
+  function etiquetaHTML(o) {
+    if (o.delivery !== 'correios' || !o.stock_deducted || o.status === 'cancelado') return '';
+    var id = esc(o.id);
+    var status = o.label_status === 'cancelada' ? null : o.label_status;
+    if (!status) {
+      if (o.status !== 'pago') return '';
+      if (!o.address_parts || !o.cpf) return '<p class="nota-pequena">Pedido feito antes da etiqueta automática: gere a etiqueta direto no Melhor Envio.</p>';
+      var p = pacotePadrao(o);
+      var campo = function (nome, rotulo, valor, passo) {
+        return '<label>' + rotulo + '<input name="' + nome + '" inputmode="decimal" value="' + esc(valor) + '" step="' + passo + '"></label>';
+      };
+      return '<form class="etiqueta" data-etiqueta="' + id + '"><p class="etiqueta-titulo">Etiqueta Melhor Envio</p>' +
+        '<div class="etiqueta-medidas">' + campo('altura', 'Altura (cm)', p.altura, 1) + campo('largura', 'Largura (cm)', p.largura, 1) +
+        campo('comprimento', 'Comprimento (cm)', p.comprimento, 1) + campo('peso', 'Peso (kg)', p.peso, 0.01) + '</div>' +
+        '<p class="nota-pequena">Meça o pacote já embalado. Medidas menores que as reais podem gerar cobrança extra dos Correios.</p>' +
+        '<button class="botao botao-vinho" type="submit">Preparar etiqueta</button></form>';
+    }
+    if (status === 'carrinho') {
+      return '<div class="etiqueta"><p class="etiqueta-titulo">Etiqueta Melhor Envio</p>' +
+        '<p>Etiqueta pronta para comprar: <strong>' + (o.label_price_cents ? dinheiro(o.label_price_cents) : 'valor no Melhor Envio') + '</strong>' +
+        ' (o cliente pagou ' + dinheiro(o.shipping_cents) + ' de frete). O valor sai do saldo do Melhor Envio.</p>' +
+        '<div class="pedido-acoes"><button class="botao botao-vinho" type="button" data-etiqueta-acao="comprar" data-pedido="' + id + '">Comprar e gerar etiqueta</button>' +
+        '<button class="botao-texto botao-perigo" type="button" data-etiqueta-acao="descartar" data-pedido="' + id + '">Descartar</button></div></div>';
+    }
+    if (status === 'comprada') {
+      return '<div class="etiqueta"><p class="etiqueta-titulo">Etiqueta Melhor Envio</p><p>Etiqueta paga, falta gerar.</p>' +
+        '<div class="pedido-acoes"><button class="botao botao-vinho" type="button" data-etiqueta-acao="comprar" data-pedido="' + id + '">Gerar etiqueta</button>' +
+        '<button class="botao-texto botao-perigo" type="button" data-etiqueta-acao="descartar" data-pedido="' + id + '">Cancelar etiqueta</button></div></div>';
+    }
+    return '<div class="etiqueta"><p class="etiqueta-titulo">Etiqueta Melhor Envio</p>' +
+      '<p>' + (o.tracking_code ? 'Rastreio: <strong>' + esc(o.tracking_code) + '</strong>. ' : 'Etiqueta gerada. O rastreio aparece aqui depois da postagem. ') +
+      'O status muda sozinho quando os Correios registram a postagem e a entrega.</p>' +
+      '<div class="pedido-acoes"><button class="botao botao-vinho" type="button" data-etiqueta-acao="imprimir" data-pedido="' + id + '">Imprimir etiqueta</button>' +
+      '<button class="botao-texto" type="button" data-etiqueta-acao="rastrear" data-pedido="' + id + '">Atualizar rastreio</button>' +
+      (o.status === 'pago' ? '<button class="botao-texto botao-perigo" type="button" data-etiqueta-acao="descartar" data-pedido="' + id + '">Cancelar etiqueta</button>' : '') +
+      '</div></div>';
+  }
+  function chamarEtiqueta(corpo) {
+    return sb.functions.invoke('etiqueta', { body: corpo }).then(function (r) {
+      if (!r.error) return r.data;
+      var resposta = r.error.context;
+      return (resposta && resposta.json ? resposta.json().catch(function () { return {}; }) : Promise.resolve({})).then(function (d) {
+        throw new Error(d.error || 'Não foi possível falar com o Melhor Envio agora.');
+      });
+    });
+  }
+  $('#lista-pedidos').addEventListener('submit', function (evento) {
+    var form = evento.target.closest('[data-etiqueta]');
+    if (!form) return;
+    evento.preventDefault();
+    var botao = form.querySelector('button[type="submit"]');
+    botao.disabled = true;
+    botao.textContent = 'Preparando…';
+    chamarEtiqueta({ acao: 'preparar', order_id: form.dataset.etiqueta, pacote: {
+      altura: form.altura.value, largura: form.largura.value, comprimento: form.comprimento.value, peso: form.peso.value
+    } }).then(function () { avisar('Etiqueta pronta para comprar.'); carregarPedidos(); }, function (erro) {
+      avisar(erro.message);
+      botao.disabled = false;
+      botao.textContent = 'Preparar etiqueta';
+    });
+  });
+  $('#lista-pedidos').addEventListener('click', function (evento) {
+    var botao = evento.target.closest('[data-etiqueta-acao]');
+    if (!botao) return;
+    var acao = botao.dataset.etiquetaAcao;
+    var pedido = pedidos.filter(function (o) { return o.id === botao.dataset.pedido; })[0];
+    if (acao === 'comprar' && pedido.label_status === 'carrinho' &&
+      !window.confirm('Comprar a etiqueta do pedido #' + pedido.number + (pedido.label_price_cents ? ' por ' + dinheiro(pedido.label_price_cents) : '') + '? O valor sai do saldo do Melhor Envio.')) return;
+    if (acao === 'descartar' && pedido.label_status !== 'carrinho' &&
+      !window.confirm('Cancelar a etiqueta do pedido #' + pedido.number + '? O Melhor Envio devolve o valor ao saldo.')) return;
+    var janela = acao === 'imprimir' ? window.open('', '_blank') : null;
+    botao.disabled = true;
+    chamarEtiqueta({ acao: acao, order_id: pedido.id }).then(function (dados) {
+      if (acao === 'imprimir') {
+        if (janela) janela.location = dados.url; else window.location = dados.url;
+        botao.disabled = false;
+        return;
+      }
+      avisar({ comprar: 'Etiqueta gerada. Já pode imprimir.', descartar: 'Etiqueta cancelada.', rastrear: 'Rastreio atualizado.' }[acao]);
+      carregarPedidos();
+    }, function (erro) {
+      if (janela) janela.close();
+      avisar(erro.message);
+      botao.disabled = false;
+    });
+  });
   function concluirPedido(promessa, sucesso) {
     promessa.then(function (r) {
       if (r.error) avisar(r.error.code === 'P0001' ? r.error.message : 'Não foi possível atualizar o pedido.');
