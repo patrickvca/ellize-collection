@@ -11,6 +11,8 @@
     enviado: 'Enviado', entregue: 'Entregue', cancelado: 'Cancelado'
   };
   var VOLTAS = ['carrinho.html'];
+  // ID público do cliente OAuth (Google Cloud da conta ellizecollection@gmail.com).
+  var GOOGLE_CLIENT_ID = '1001963631930-5oipr7scfi2km3bh91bvuh79lp87ohhb.apps.googleusercontent.com';
 
   var sb = window.supabase.createClient(URL_SUPABASE, CHAVE_PUBLICA, {
     auth: { flowType: 'pkce', persistSession: true, detectSessionInUrl: true }
@@ -727,8 +729,10 @@
       var cadastro = modo === 'cadastro';
       alvo.innerHTML = '<div class="acesso">' +
         '<h1>' + (cadastro ? 'Criar conta' : 'Entrar') + '</h1>' +
-        '<button class="botao botao-linha botao-largo" id="google" type="button" disabled>Continuar com Google</button>' +
+        '<div class="google-entrar" id="google-oficial"></div>' +
+        '<button class="botao botao-linha botao-largo" id="google" type="button" disabled hidden>Continuar com Google</button>' +
         '<p class="nota-pequena" id="google-nota" hidden>O login com Google ainda está sendo ativado. Use e-mail e senha.</p>' +
+        '<p class="mensagem mensagem-erro" id="msg-google" role="alert" hidden></p>' +
         '<p class="divisor"><span>ou</span></p>' +
         '<form class="formulario" id="form-acesso" novalidate>' +
         (cadastro ? '<label class="campo">Nome completo<input name="nome" autocomplete="name" required minlength="2" maxlength="120"></label>' : '') +
@@ -774,6 +778,48 @@
       m.className = 'mensagem ' + (erro ? 'mensagem-erro' : 'mensagem-sucesso');
       m.hidden = false;
     }
+    // Botão oficial do Google: o login acontece no próprio site, e a tela do Google mostra a loja, não o Supabase.
+    function carregarGoogle() {
+      if (window.google && window.google.accounts) return Promise.resolve(window.google.accounts.id);
+      return new Promise(function (ok, falha) {
+        var s = document.createElement('script');
+        s.src = 'https://accounts.google.com/gsi/client';
+        s.async = true;
+        s.onload = function () { window.google && window.google.accounts ? ok(window.google.accounts.id) : falha(); };
+        s.onerror = falha;
+        document.head.appendChild(s);
+      });
+    }
+    function sha256Hex(texto) {
+      return crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto)).then(function (b) {
+        return Array.prototype.map.call(new Uint8Array(b), function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+      });
+    }
+    function botaoGoogleOficial() {
+      var caixa = $('#google-oficial');
+      var nonce = Array.prototype.map.call(crypto.getRandomValues(new Uint8Array(16)), function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+      return Promise.all([carregarGoogle(), sha256Hex(nonce)]).then(function (r) {
+        var gid = r[0];
+        if (!caixa.isConnected) return;
+        gid.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          nonce: r[1],
+          ux_mode: 'popup',
+          context: 'signin',
+          callback: function (resposta) {
+            $('#msg-google').hidden = true;
+            sb.auth.signInWithIdToken({ provider: 'google', token: resposta.credential, nonce: nonce }).then(function (res) {
+              if (res.error) { mensagem('#msg-google', 'Não foi possível entrar com o Google. Tente de novo ou use e-mail e senha.', true); return; }
+              aposEntrar();
+            }, function () { mensagem('#msg-google', 'Sem conexão. Verifique sua internet e tente novamente.', true); });
+          }
+        });
+        gid.renderButton(caixa, {
+          type: 'standard', theme: 'outline', size: 'large', text: 'continue_with', shape: 'pill',
+          logo_alignment: 'center', locale: 'pt-BR', width: Math.min(400, Math.max(200, caixa.parentNode.clientWidth || 300))
+        });
+      });
+    }
     function ativarGoogle() {
       var botao = $('#google');
       fetch(URL_SUPABASE + '/auth/v1/settings', { headers: { apikey: CHAVE_PUBLICA } })
@@ -781,6 +827,8 @@
         .then(function (config) {
           if (!botao.isConnected) return;
           if (!config.external || !config.external.google) { $('#google-nota').hidden = false; return; }
+          // Se o script do Google não carregar (bloqueador, rede), volta para o login pelo Supabase.
+          botaoGoogleOficial().catch(function () { if (botao.isConnected) botao.hidden = false; });
           botao.disabled = false;
           botao.addEventListener('click', function () {
             ocupado(botao, true, 'Abrindo o Google…');
