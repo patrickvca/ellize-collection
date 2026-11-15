@@ -14,6 +14,46 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+type Endereco = { localidade: string; uf: string; logradouro: string; bairro: string; ibge: string };
+
+// O ViaCEP às vezes fica fora do alcance do Supabase. Tenta outros serviços na sequência.
+// Só passa ao próximo se o anterior falhar; o primeiro que diz "não existe" encerra a busca.
+const SERVICOS_CEP: { url: (cep: string) => string; ler: (d: any) => Endereco | null }[] = [
+  {
+    url: (cep) => 'https://viacep.com.br/ws/' + cep + '/json/',
+    ler: (d) => d.erro ? null : { localidade: d.localidade, uf: d.uf, logradouro: d.logradouro, bairro: d.bairro, ibge: d.ibge },
+  },
+  {
+    url: (cep) => 'https://cep.awesomeapi.com.br/json/' + cep,
+    ler: (d) => d.city ? { localidade: d.city, uf: d.state, logradouro: d.address || '', bairro: d.district || '', ibge: String(d.city_ibge || '') } : null,
+  },
+  {
+    url: (cep) => 'https://brasilapi.com.br/api/cep/v1/' + cep,
+    ler: (d) => d.city ? { localidade: d.city, uf: d.state, logradouro: d.street || '', bairro: d.neighborhood || '', ibge: String(d.ibge?.city || '') } : null,
+  },
+  {
+    url: (cep) => 'https://opencep.com/v1/' + cep,
+    ler: (d) => d.localidade ? { localidade: d.localidade, uf: d.uf, logradouro: d.logradouro || '', bairro: d.bairro || '', ibge: d.ibge || '' } : null,
+  },
+];
+
+async function consultarCep(cep: string): Promise<Endereco | null | 'falha'> {
+  for (const servico of SERVICOS_CEP) {
+    try {
+      const r = await fetch(servico.url(cep), { signal: AbortSignal.timeout(4000) });
+      if (r.status === 404 || r.status === 400) return null;
+      if (!r.ok) continue;
+      const endereco = servico.ler(await r.json());
+      if (!endereco) return null;
+      if (!endereco.ibge && endereco.localidade === 'Vitória da Conquista' && endereco.uf === 'BA') endereco.ibge = IBGE_CONQUISTA;
+      return endereco;
+    } catch (erro) {
+      console.error('CEP ' + servico.url(cep) + ': ' + (erro instanceof Error ? erro.message : erro));
+    }
+  }
+  return 'falha';
+}
+
 type Item = { product_id: string; quantity: number };
 type Opcao = { kind: string; service: string; price_cents: number; days: number | null };
 
@@ -101,10 +141,9 @@ Deno.serve(async (req) => {
     const pecas = itens.reduce((soma, i) => soma + i.quantity, 0);
     const valor = itens.reduce((soma, i) => soma + i.quantity * precos.get(i.product_id), 0);
 
-    const consulta = await fetch('https://viacep.com.br/ws/' + cep + '/json/');
-    if (!consulta.ok) return responder({ error: 'Não foi possível consultar o CEP. Tente novamente.' });
-    const endereco = await consulta.json();
-    if (endereco.erro) return responder({ error: 'CEP não encontrado. Confira os números.' });
+    const endereco = await consultarCep(cep);
+    if (endereco === 'falha') return responder({ error: 'Não foi possível consultar o CEP. Tente novamente.' });
+    if (!endereco) return responder({ error: 'CEP não encontrado. Confira os números.' });
 
     const local = endereco.ibge === IBGE_CONQUISTA;
     let opcoes: Opcao[] | null;

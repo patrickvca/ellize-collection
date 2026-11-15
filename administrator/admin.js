@@ -1335,7 +1335,7 @@
   }
   function desenharRelatorio(dados) {
     var caixa = $('#relatorio');
-    if (!dados.orders) {
+    if (!dados || !dados.orders) {
       caixa.innerHTML = '<p class="estado">Nenhuma venda finalizada neste período.</p>';
       return;
     }

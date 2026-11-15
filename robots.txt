@@ -1,0 +1,7 @@
+User-agent: *
+Disallow: /administrator/
+Disallow: /pagamento.html
+Disallow: /carrinho.html
+Disallow: /conta.html
+
+Sitemap: https://ellizecollection.com.br/sitemap.xml
