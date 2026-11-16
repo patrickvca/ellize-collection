@@ -280,7 +280,7 @@
         '<button class="botao botao-linha" type="button" id="calcular-produto">Calcular</button></span></label>' +
         '<div id="frete-produto" aria-live="polite"></div></div>' +
         '<div class="sanfona"><details open><summary>Sobre a peça</summary><p>' + esc(p.description) + '</p></details>' +
-        '<details><summary>Entrega</summary><p>Enviamos para todo o Brasil pelos Correios, com valor e prazo calculados pelo CEP. Em Vitória da Conquista, você retira na loja sem custo ou recebe em casa por R$ 10,00.</p></details>' +
+        '<details><summary>Entrega</summary><p>Enviamos para todo o Brasil pelos Correios e outras transportadoras, com valor e prazo calculados pelo CEP. Em Vitória da Conquista, você retira na loja sem custo ou recebe em casa por R$ 10,00.</p></details>' +
         '<details><summary>Trocas e devoluções</summary><p>Você tem até 7 dias depois do recebimento para pedir troca ou devolução. <a href="politicas.html">Ver a política completa</a>.</p></details></div>' +
         '</form>';
       $('#form-produto').addEventListener('submit', function (evento) {
@@ -557,7 +557,7 @@
         '<label class="campo">Nome completo<input name="nome" autocomplete="name" required minlength="2" maxlength="120" value="' + esc(meta.full_name || meta.name || '') + '"></label>' +
         '<label class="campo">Telefone com DDD<input name="telefone" type="tel" autocomplete="tel" inputmode="tel" required maxlength="20"></label>' +
         '<label class="campo" id="campo-cpf" hidden>CPF<input name="cpf" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="000.000.000-00">' +
-        '<span class="nota-pequena">Os Correios pedem o CPF de quem recebe na etiqueta.</span></label>' +
+        '<span class="nota-pequena">A transportadora pede o CPF de quem recebe na etiqueta.</span></label>' +
         '<fieldset class="endereco" id="campo-endereco" hidden><legend>Endereço de entrega</legend>' +
         '<label class="campo">Rua<input name="rua" autocomplete="address-line1" maxlength="120"></label>' +
         '<div class="endereco-linha endereco-numero"><label class="campo">Número<input name="numero" inputmode="text" maxlength="10"></label>' +
@@ -654,7 +654,7 @@
         return;
       }
       if (entrega.kind === 'correios' && !cpfValido(form.cpf.value)) {
-        erro.textContent = 'Informe um CPF válido. Os Correios pedem o CPF de quem recebe.';
+        erro.textContent = 'Informe um CPF válido. A transportadora pede o CPF de quem recebe.';
         erro.hidden = false;
         form.cpf.focus();
         return;
@@ -1128,7 +1128,7 @@
         return '<li class="' + (n < atual ? 'feita' : n === atual ? 'atual' : '') + '"' + (n === atual ? ' aria-current="step"' : '') + '>' + etapa + '</li>';
       }).join('') + '</ol>' +
         (o.tracking_code ? '<p class="rastreio-codigo">Código de rastreio: <strong>' + esc(o.tracking_code) + '</strong> ' +
-          '<a href="https://rastreamento.correios.com.br/app/index.php" target="_blank" rel="noopener">Rastrear nos Correios</a></p>' : '');
+          '<a href="https://melhorrastreio.com.br/rastreio/' + encodeURIComponent(o.tracking_code) + '" target="_blank" rel="noopener">Acompanhar a entrega</a></p>' : '');
     }
     function solicitacaoHTML(o) {
       var NOMES = { aberto: 'Em análise', aprovado: 'Aprovada', recusado: 'Recusada', concluido: 'Concluída' };

@@ -980,12 +980,12 @@
     if (o.status === 'entregue') return ola + 'Seu ' + pedido + ' foi entregue. Esperamos que você ame as peças! Qualquer coisa, estamos por aqui.';
     if (o.status === 'enviado') {
       return ola + 'Seu ' + pedido + ' saiu para entrega' + (o.tracking_code ? '. Código de rastreio: ' + o.tracking_code +
-        '. Acompanhe em https://rastreamento.correios.com.br/app/index.php ou em Minhas compras: https://ellizecollection.com.br/conta.html' : '.');
+        '. Acompanhe em https://melhorrastreio.com.br/rastreio/' + encodeURIComponent(o.tracking_code) + ' ou em Minhas compras: https://ellizecollection.com.br/conta.html' : '.');
     }
     if (o.status === 'pago') {
       if (o.delivery === 'retirada') return ola + 'O pagamento do ' + pedido + ' foi confirmado e ele já pode ser retirado na loja: ' + LOJA_ENDERECO + '.';
       if (o.delivery === 'local') return ola + 'O pagamento do ' + pedido + ' foi confirmado. Já estamos separando suas peças e combinamos a entrega por aqui.';
-      return ola + 'O pagamento do ' + pedido + ' foi confirmado. Já estamos separando suas peças e avisamos quando for postado nos Correios.';
+      return ola + 'O pagamento do ' + pedido + ' foi confirmado. Já estamos separando suas peças e avisamos assim que for postado.';
     }
     return ola + 'Recebemos seu ' + pedido + ' no valor de ' + dinheiro(o.total_cents) + '. Assim que o pagamento for confirmado, avisamos por aqui.';
   }
@@ -994,6 +994,9 @@
   function pacotePadrao(o) {
     var pecas = (o.order_items || []).reduce(function (s, i) { return s + i.quantity; }, 0) || 1;
     return o.package || { altura: 5 + 3 * pecas, largura: 25, comprimento: 30, peso: Math.round(0.3 * pecas * 100) / 100 };
+  }
+  function agenciaHTML(o) {
+    return o.package && o.package.agencia ? '<p>Entregar o pacote em: <strong>' + esc(o.package.agencia) + '</strong></p>' : '';
   }
   function etiquetaHTML(o) {
     if (o.delivery !== 'correios' || !o.stock_deducted || o.status === 'cancelado') return '';
@@ -1006,16 +1009,16 @@
       var campo = function (nome, rotulo, valor, passo) {
         return '<label>' + rotulo + '<input name="' + nome + '" inputmode="decimal" value="' + esc(valor) + '" step="' + passo + '"></label>';
       };
-      return '<form class="etiqueta" data-etiqueta="' + id + '"><p class="etiqueta-titulo">Etiqueta Melhor Envio</p>' +
+      return '<form class="etiqueta" data-etiqueta="' + id + '"><p class="etiqueta-titulo">Etiqueta Melhor Envio · ' + esc(o.shipping_service || '') + '</p>' +
         '<div class="etiqueta-medidas">' + campo('altura', 'Altura (cm)', p.altura, 1) + campo('largura', 'Largura (cm)', p.largura, 1) +
         campo('comprimento', 'Comprimento (cm)', p.comprimento, 1) + campo('peso', 'Peso (kg)', p.peso, 0.01) + '</div>' +
-        '<p class="nota-pequena">Meça o pacote já embalado. Medidas menores que as reais podem gerar cobrança extra dos Correios.</p>' +
+        '<p class="nota-pequena">Meça o pacote já embalado. Medidas menores que as reais podem gerar cobrança extra da transportadora.</p>' +
         '<button class="botao botao-vinho" type="submit">Preparar etiqueta</button></form>';
     }
     if (status === 'carrinho') {
       return '<div class="etiqueta"><p class="etiqueta-titulo">Etiqueta Melhor Envio</p>' +
         '<p>Etiqueta pronta para comprar: <strong>' + (o.label_price_cents ? dinheiro(o.label_price_cents) : 'valor no Melhor Envio') + '</strong>' +
-        ' (o cliente pagou ' + dinheiro(o.shipping_cents) + ' de frete). O valor sai do saldo do Melhor Envio.</p>' +
+        ' (o cliente pagou ' + dinheiro(o.shipping_cents) + ' de frete). O valor sai do saldo do Melhor Envio.</p>' + agenciaHTML(o) +
         '<div class="pedido-acoes"><button class="botao botao-vinho" type="button" data-etiqueta-acao="comprar" data-pedido="' + id + '">Comprar e gerar etiqueta</button>' +
         '<button class="botao-texto botao-perigo" type="button" data-etiqueta-acao="descartar" data-pedido="' + id + '">Descartar</button></div></div>';
     }
@@ -1026,7 +1029,8 @@
     }
     return '<div class="etiqueta"><p class="etiqueta-titulo">Etiqueta Melhor Envio</p>' +
       '<p>' + (o.tracking_code ? 'Rastreio: <strong>' + esc(o.tracking_code) + '</strong>. ' : 'Etiqueta gerada. O rastreio aparece aqui depois da postagem. ') +
-      'O status muda sozinho quando os Correios registram a postagem e a entrega.</p>' +
+      'O status muda sozinho quando a transportadora registra a postagem e a entrega.</p>' +
+      agenciaHTML(o) +
       '<div class="pedido-acoes"><button class="botao botao-vinho" type="button" data-etiqueta-acao="imprimir" data-pedido="' + id + '">Imprimir etiqueta</button>' +
       '<button class="botao-texto" type="button" data-etiqueta-acao="rastrear" data-pedido="' + id + '">Atualizar rastreio</button>' +
       (o.status === 'pago' ? '<button class="botao-texto botao-perigo" type="button" data-etiqueta-acao="descartar" data-pedido="' + id + '">Cancelar etiqueta</button>' : '') +

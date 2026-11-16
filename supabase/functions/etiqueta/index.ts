@@ -4,6 +4,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.49.4';
 
 const ME = Deno.env.get('MELHOR_ENVIO_URL') || 'https://melhorenvio.com.br';
+// Pedidos antigos guardavam só o nome; os novos guardam shipping_service_id (qualquer transportadora).
 const SERVICOS: Record<string, number> = { PAC: 1, SEDEX: 2 };
 const LOJA = {
   name: 'Ellize Collection',
@@ -82,11 +83,11 @@ async function souAdmin(req: Request, admin: ReturnType<typeof createClient>) {
 type Pedido = Record<string, any>;
 
 async function preparar(admin: any, pedido: Pedido, pacote: any) {
-  if (pedido.delivery !== 'correios') throw new Aviso('Este pedido não é pelos Correios.');
+  if (pedido.delivery !== 'correios') throw new Aviso('Este pedido não é por transportadora.');
   if (!pedido.stock_deducted || pedido.status !== 'pago') throw new Aviso('A etiqueta só pode ser feita para pedidos pagos.');
   if (pedido.label_status && pedido.label_status !== 'cancelada') throw new Aviso('Este pedido já tem etiqueta.');
-  const servico = SERVICOS[String(pedido.shipping_service || '').toUpperCase()];
-  if (!servico) throw new Aviso('Serviço de frete desconhecido: ' + pedido.shipping_service + '.');
+  const servico = Number(pedido.shipping_service_id) || SERVICOS[String(pedido.shipping_service || '').toUpperCase()];
+  if (!servico) throw new Aviso('Serviço de frete desconhecido: ' + pedido.shipping_service + '. Faça esta etiqueta direto no Melhor Envio.');
   const partes = pedido.address_parts;
   if (!partes || !partes.street || !partes.number || !partes.district) throw new Aviso('O pedido não tem o endereço separado. Faça esta etiqueta direto no Melhor Envio.');
   if (!pedido.cpf) throw new Aviso('O pedido não tem o CPF do cliente. Faça esta etiqueta direto no Melhor Envio.');
@@ -110,7 +111,7 @@ async function preparar(admin: any, pedido: Pedido, pacote: any) {
     email = data?.user?.email || '';
   }
 
-  const carrinho = await melhorEnvio('/api/v2/me/cart', {
+  const corpo: Record<string, unknown> = {
     service: servico,
     from: remetente(),
     to: {
@@ -138,13 +139,38 @@ async function preparar(admin: any, pedido: Pedido, pacote: any) {
       platform: 'Ellize Collection',
       tags: [{ tag: 'Pedido #' + pedido.number, url: null }],
     },
-  });
+  };
+  // Algumas transportadoras (Jadlog, por exemplo) exigem a agência onde o pacote será entregue.
+  let agencia: { id: number; nome: string } | null = null;
+  let carrinho: any;
+  try {
+    carrinho = await melhorEnvio('/api/v2/me/cart', corpo);
+  } catch (erro) {
+    if (!(erro instanceof Aviso) || !/ag[eê]ncia|agency/i.test(erro.message)) throw erro;
+    agencia = await agenciaNaCidade(servico);
+    corpo.agency = agencia.id;
+    carrinho = await melhorEnvio('/api/v2/me/cart', corpo);
+  }
   const preco = Math.round(Number(carrinho.price) * 100) || null;
   await admin.from('orders').update({
     me_order_id: String(carrinho.id), label_status: 'carrinho', label_price_cents: preco,
-    package: { altura: volume.height, largura: volume.width, comprimento: volume.length, peso: volume.weight },
+    package: { altura: volume.height, largura: volume.width, comprimento: volume.length, peso: volume.weight, agencia: agencia?.nome || null },
   }).eq('id', pedido.id);
-  return { price_cents: preco };
+  return { price_cents: preco, agencia: agencia?.nome || null };
+}
+
+// Primeira agência ativa da transportadora do serviço em Vitória da Conquista.
+async function agenciaNaCidade(servico: number) {
+  const info = await melhorEnvio('/api/v2/me/shipment/services/' + servico, undefined, 'GET');
+  const empresa = info?.company?.id;
+  if (!empresa) throw new Aviso('Não foi possível descobrir a transportadora deste frete.');
+  const lista = await melhorEnvio('/api/v2/me/shipment/agencies?company=' + empresa + '&country=BR&state=' + LOJA.state_abbr +
+    '&city=' + encodeURIComponent(LOJA.city), undefined, 'GET');
+  const agencias = (Array.isArray(lista) ? lista : []).filter((a: any) => !a.status || a.status === 'available');
+  if (!agencias.length) throw new Aviso('A transportadora ' + (info.company.name || '') + ' não tem agência em ' + LOJA.city + '. Faça esta etiqueta direto no Melhor Envio.');
+  const a = agencias[0];
+  const endereco = a.address ? [a.address.address, a.address.number, a.address.district].filter(Boolean).join(', ') : '';
+  return { id: Number(a.id), nome: (a.name || 'Agência') + (endereco ? ' (' + endereco + ')' : '') };
 }
 
 async function comprar(admin: any, pedido: Pedido) {

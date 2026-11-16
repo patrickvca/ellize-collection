@@ -3,7 +3,6 @@ import { createClient } from 'npm:@supabase/supabase-js@2.49.4';
 const IBGE_CONQUISTA = '2933307';
 const ENTREGA_LOCAL_CENTAVOS = 1000;
 const CEP_LOJA = '45026445';
-const SERVICOS_CORREIOS = '1,2'; // PAC e SEDEX no Melhor Envio
 const PESO_PECA_KG = 0.3;
 const CAIXA = { largura: 25, comprimento: 30, alturaBase: 5, alturaPeca: 3 };
 const LIMITE_COTACOES = 60; // linhas por cliente em 10 minutos
@@ -55,7 +54,7 @@ async function consultarCep(cep: string): Promise<Endereco | null | 'falha'> {
 }
 
 type Item = { product_id: string; quantity: number };
-type Opcao = { kind: string; service: string; price_cents: number; days: number | null };
+type Opcao = { kind: string; service: string; price_cents: number; days: number | null; service_id?: number | null };
 
 function responder(corpo: unknown) {
   return new Response(JSON.stringify(corpo), { headers: { ...CORS, 'Content-Type': 'application/json' } });
@@ -68,7 +67,9 @@ async function resumoCliente(req: Request) {
   return Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function cotarCorreios(cep: string, pecas: number, valorCentavos: number): Promise<Opcao[] | null> {
+// Cota em todas as transportadoras ativas na conta do Melhor Envio (sem filtrar serviços).
+// kind 'correios' quer dizer "envio por transportadora" (o nome ficou por compatibilidade).
+async function cotarTransportadoras(cep: string, pecas: number, valorCentavos: number): Promise<Opcao[] | null> {
   const token = Deno.env.get('MELHOR_ENVIO_TOKEN');
   if (!token) return null;
   const base = Deno.env.get('MELHOR_ENVIO_URL') || 'https://melhorenvio.com.br';
@@ -93,7 +94,6 @@ async function cotarCorreios(cep: string, pecas: number, valorCentavos: number):
         quantity: 1,
       }],
       options: { receipt: false, own_hand: false },
-      services: SERVICOS_CORREIOS,
     }),
   });
   if (!resposta.ok) {
@@ -101,14 +101,21 @@ async function cotarCorreios(cep: string, pecas: number, valorCentavos: number):
     return [];
   }
   const servicos = await resposta.json();
-  return servicos
-    .filter((s: Record<string, unknown>) => !s.error && s.custom_price)
-    .map((s: Record<string, unknown>) => ({
-      kind: 'correios',
-      service: String(s.name),
-      price_cents: Math.round(Number(s.custom_price) * 100),
-      days: Number(s.custom_delivery_time) || null,
-    }));
+  return (Array.isArray(servicos) ? servicos : [])
+    .filter((s: any) => !s.error && s.custom_price)
+    .map((s: any) => {
+      const empresa = String(s.company?.name || '').trim();
+      const nome = String(s.name || '').trim();
+      return {
+        kind: 'correios',
+        service: (empresa && !nome.toLowerCase().startsWith(empresa.toLowerCase()) ? empresa + ' ' : '') + nome,
+        service_id: Number(s.id) || null,
+        price_cents: Math.round(Number(s.custom_price) * 100),
+        days: Number(s.custom_delivery_time) || null,
+      };
+    })
+    .sort((a: Opcao, b: Opcao) => a.price_cents - b.price_cents)
+    .slice(0, 6);
 }
 
 Deno.serve(async (req) => {
@@ -153,7 +160,7 @@ Deno.serve(async (req) => {
         { kind: 'local', service: 'Entrega em domicílio', price_cents: ENTREGA_LOCAL_CENTAVOS, days: null },
       ];
     } else {
-      opcoes = await cotarCorreios(cep, pecas, valor);
+      opcoes = await cotarTransportadoras(cep, pecas, valor);
       if (!opcoes) return responder({ error: 'O frete para sua cidade é combinado com a loja. Fale com a gente pelo WhatsApp.', contato: true });
       if (!opcoes.length) return responder({ error: 'Não foi possível calcular o frete agora. Tente novamente ou fale com a loja.', contato: true });
     }
