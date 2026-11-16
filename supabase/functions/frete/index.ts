@@ -6,6 +6,15 @@ const CEP_LOJA = '45026445';
 const PESO_PECA_KG = 0.3;
 const CAIXA = { largura: 25, comprimento: 30, alturaBase: 5, alturaPeca: 3 };
 const LIMITE_COTACOES = 60; // linhas por cliente em 10 minutos
+// Serviços do Melhor Envio que a loja não usa: Jadlog .Package (3) e .Com (4), LATAM Cargo (12),
+// Buslog (22, sem ponto na cidade) e J&T Express (33). Da Jadlog fica só o .Package Centralizado (27).
+const SERVICOS_FORA = new Set([3, 4, 12, 22, 33]);
+// Nome que o cliente vê para cada serviço; os outros usam "Transportadora Serviço".
+const NOMES: Record<number, string> = {
+  1: 'Correios PAC', 2: 'Correios SEDEX', 17: 'Correios Mini Envios',
+  27: 'Jadlog', 31: 'Loggi', 32: 'Loggi', 34: 'Loggi',
+  35: 'Total Express', 16: 'Azul Cargo', 15: 'Azul Cargo Expresso',
+};
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -102,13 +111,13 @@ async function cotarTransportadoras(cep: string, pecas: number, valorCentavos: n
   }
   const servicos = await resposta.json();
   return (Array.isArray(servicos) ? servicos : [])
-    .filter((s: any) => !s.error && s.custom_price)
+    .filter((s: any) => !s.error && s.custom_price && !SERVICOS_FORA.has(Number(s.id)))
     .map((s: any) => {
       const empresa = String(s.company?.name || '').trim();
       const nome = String(s.name || '').trim();
       return {
         kind: 'correios',
-        service: (empresa && !nome.toLowerCase().startsWith(empresa.toLowerCase()) ? empresa + ' ' : '') + nome,
+        service: NOMES[Number(s.id)] || (empresa && !nome.toLowerCase().startsWith(empresa.toLowerCase()) ? empresa + ' ' : '') + nome,
         service_id: Number(s.id) || null,
         price_cents: Math.round(Number(s.custom_price) * 100),
         days: Number(s.custom_delivery_time) || null,

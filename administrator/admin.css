@@ -279,3 +279,4 @@ body.arrastando-categoria, body.arrastando-categoria * { cursor: grabbing !impor
   .relatorio-grade { display: block !important; }
   .relatorio-grade > * { margin-bottom: 0.75rem; }
 }
+.ponto-postagem { padding: 0.375rem 0.625rem; border-left: 3px solid var(--vinho); background: var(--marfim, #faf6f0); }

@@ -955,6 +955,7 @@
         '<p>' + (o.delivery === 'retirada' ? 'Retirar na loja'
           : esc(o.shipping_service || 'Receber em casa') + (o.shipping_cents ? ' · frete ' + dinheiro(o.shipping_cents) : '') +
             (o.shipping_days ? ' · até ' + esc(o.shipping_days) + ' dias' : '') + ': ' + esc(o.address || '') + (o.cep ? ' · CEP ' + esc(o.cep) : '')) + '</p>' +
+        pontoPostagem(o) +
         (o.cpf ? '<p>CPF: ' + esc(o.cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4')) + '</p>' : '') +
         (o.credit_cents ? '<p>Crédito usado: ' + dinheiro(o.credit_cents) + '</p>' : '') +
         (o.note ? '<p>Observação: ' + esc(o.note) + '</p>' : '') +
@@ -995,8 +996,27 @@
     var pecas = (o.order_items || []).reduce(function (s, i) { return s + i.quantity; }, 0) || 1;
     return o.package || { altura: 5 + 3 * pecas, largura: 25, comprimento: 30, peso: Math.round(0.3 * pecas * 100) / 100 };
   }
+  /* Onde a loja leva o pacote, conforme a transportadora que o cliente escolheu.
+     Pontos de Vitória da Conquista segundo o Melhor Envio (novembro de 2026). */
+  var PONTOS = [
+    { servicos: [1, 2, 17], nome: 'correios', ponto: 'Correios: Agência Central, Praça Joaquim Correia, 41, Centro (ou outra agência dos Correios)' },
+    { servicos: [27], nome: 'jadlog', ponto: 'Jadlog: unidade própria, Rua China, s/n, Jurema (o Centralizado só é aceito lá)' },
+    { servicos: [31, 32, 34], nome: 'loggi', ponto: 'Loggi Ponto: Rua Carioca, 5, Centro' },
+    { servicos: [35], nome: 'total express', ponto: 'Total Express: Speed Gráfica Rápida, Rua do Triunfo, 235, Centro (ou Moutier Parfum, Av. Lauro de Freitas, 142, Centro)' },
+    { servicos: [15, 16], nome: 'azul cargo', ponto: 'Azul Cargo: Av. Juracy Magalhães, 78 A, Jurema' }
+  ];
+  function pontoPostagem(o) {
+    if (o.delivery !== 'correios') return '';
+    var servico = String(o.shipping_service || '').toLowerCase();
+    var achado = PONTOS.filter(function (p) {
+      return o.shipping_service_id ? p.servicos.indexOf(Number(o.shipping_service_id)) !== -1
+        : servico.indexOf(p.nome) !== -1 || (p.nome === 'correios' && /^(pac|sedex|mini envios)$/.test(servico));
+    })[0];
+    var texto = o.package && o.package.agencia ? o.package.agencia : achado ? achado.ponto : 'Confira o ponto de postagem desta transportadora no Melhor Envio';
+    return '<p class="ponto-postagem">Levar o pacote em: <strong>' + esc(texto) + '</strong></p>';
+  }
   function agenciaHTML(o) {
-    return o.package && o.package.agencia ? '<p>Entregar o pacote em: <strong>' + esc(o.package.agencia) + '</strong></p>' : '';
+    return '';
   }
   function etiquetaHTML(o) {
     if (o.delivery !== 'correios' || !o.stock_deducted || o.status === 'cancelado') return '';
