@@ -1,0 +1,44 @@
+name: Atualizar sitemap
+
+# Todo dia às 6h de Vitória da Conquista (9h UTC) e também à mão, pela aba Actions.
+on:
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: sitemap
+  cancel-in-progress: false
+
+jobs:
+  sitemap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Gerar sitemap.xml
+        run: node .github/scripts/sitemap.mjs
+
+      - name: Publicar se mudou
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- sitemap.xml; then
+            echo "Sitemap sem mudanças."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add sitemap.xml
+          git commit -m "Atualiza o sitemap com os produtos"
+          git push
+          # Garante que o GitHub Pages publique o novo sitemap.
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/pages/builds" || true
