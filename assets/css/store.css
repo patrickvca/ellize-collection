@@ -6,6 +6,7 @@
 
 .filtros { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; padding-bottom: 0.25rem; overflow-x: auto; scrollbar-width: none; }
 .filtros::-webkit-scrollbar { display: none; }
+.filtros-quebra { flex-wrap: wrap; justify-content: center; max-width: 100%; overflow: visible; }
 .filtro {
   flex: none; padding: 0.625rem 1.125rem; border: 1px solid var(--linha); border-radius: var(--raio-pill);
   font-size: 0.8125rem; letter-spacing: 0.06em; text-decoration: none;
