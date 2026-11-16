@@ -248,10 +248,10 @@ section[id] { scroll-margin-top: calc(var(--header-h) + 24px); }
 .fab {
   position: fixed; right: var(--gutter); bottom: 1.25rem; z-index: 40;
   display: grid; place-items: center; width: 58px; height: 58px; border-radius: 50%;
-  background: var(--vinho); color: var(--creme); box-shadow: var(--sombra-fab);
+  background: #25d366; color: #fff; box-shadow: var(--sombra-fab);
   transition: background-color var(--rapido), transform var(--rapido) var(--suave);
 }
-.fab:hover { background: var(--vinho-forte); transform: translateY(-2px); }
+.fab:hover { background: #1ebe5a; transform: translateY(-2px); }
 .fab .icone { width: 28px; height: 28px; }
 
 /* Entrada suave, só com JS ativo */
