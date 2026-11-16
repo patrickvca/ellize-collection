@@ -971,7 +971,7 @@
   }
 
   /* Mensagem pronta para o cliente, conforme o andamento do pedido */
-  var LOJA_ENDERECO = 'Rua Miguel Pinheiro, 968, Boa Vista, Vitória da Conquista';
+  var LOJA_ENDERECO = 'Rua Miguel Pinheiro dos Santos, 968, Loja 06, Boa Vista, Vitória da Conquista';
   function mensagemWhatsapp(o) {
     var nome = String(o.customer_name || '').trim().split(/\s+/)[0];
     var ola = 'Olá' + (nome ? ', ' + nome : '') + '! Aqui é da Ellize Collection. ';

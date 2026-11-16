@@ -5,7 +5,7 @@
     whatsapp: 'https://wa.me/5577988298955'
   };
   var INSTAGRAM = 'https://www.instagram.com/ellizecollection/';
-  var MAPA = 'https://www.google.com/maps/search/?api=1&query=Rua%20Miguel%20Pinheiro%2C%20968%2C%20Boa%20Vista%2C%20Vit%C3%B3ria%20da%20Conquista%20-%20BA%2C%2045026-445';
+  var MAPA = 'https://www.google.com/maps/search/?api=1&query=Rua%20Miguel%20Pinheiro%20dos%20Santos%2C%20968%2C%20Boa%20Vista%2C%20Vit%C3%B3ria%20da%20Conquista%20-%20BA%2C%2045026-445';
   var ICONES = 'assets/img/icones.svg#';
   var inicio = document.querySelector('.hero') ? '' : 'index.html';
   var moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
