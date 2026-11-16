@@ -34,17 +34,27 @@ async function assinaturaValida(req: Request, dataId: string, segredo: string) {
 
 function formaPagamento(tipo: string, metodo: string) {
   if (metodo === 'pix' || tipo === 'bank_transfer') return 'pix';
+  if (tipo === 'ticket') return 'boleto';
   if (tipo === 'credit_card') return 'credito';
   if (tipo === 'debit_card' || tipo === 'prepaid_card') return 'debito';
   return 'outro';
 }
 
-async function cidadeDoCep(cep: string | null) {
+// O endereço salvo no pedido vale mais; sem ele, consulta o CEP (ViaCEP e, se falhar, BrasilAPI).
+// deno-lint-ignore no-explicit-any
+async function cidadeDoPedido(pedido: any) {
+  if (pedido.address_parts?.city && pedido.address_parts?.state) return { city: pedido.address_parts.city, state: pedido.address_parts.state };
+  const cep = pedido.cep;
   if (!cep) return { city: null, state: null };
   try {
     const consulta = await fetch('https://viacep.com.br/ws/' + cep + '/json/', { signal: AbortSignal.timeout(4000) });
     const endereco = await consulta.json();
-    return { city: endereco.localidade || null, state: endereco.uf || null };
+    if (endereco.localidade) return { city: endereco.localidade, state: endereco.uf || null };
+  } catch { /* tenta a reserva */ }
+  try {
+    const consulta = await fetch('https://brasilapi.com.br/api/cep/v1/' + cep, { signal: AbortSignal.timeout(4000) });
+    const e = consulta.ok ? await consulta.json() : {};
+    return { city: e.city || null, state: e.state || null };
   } catch {
     return { city: null, state: null };
   }
@@ -95,10 +105,10 @@ Deno.serve(async (req) => {
     }
 
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-    const { data: pedido } = await admin.from('orders').select('cep').eq('id', dados.external_reference).maybeSingle();
+    const { data: pedido } = await admin.from('orders').select('cep,address_parts').eq('id', dados.external_reference).maybeSingle();
     if (!pedido) return resposta(200);
 
-    const local = status === 'approved' ? await cidadeDoCep(pedido.cep) : { city: null, state: null };
+    const local = status === 'approved' ? await cidadeDoPedido(pedido) : { city: null, state: null };
     const { error } = await admin.rpc('mp_register_payment', {
       p_order: dados.external_reference,
       p_payment_id: String(dados.id),

@@ -265,3 +265,17 @@ body.arrastando-categoria, body.arrastando-categoria * { cursor: grabbing !impor
 .botao-whatsapp { margin-top: 0.75rem; }
 @media (max-width: 559.98px) { .etiqueta-medidas { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .pedido .nota-pequena { color: var(--tinta-suave); font-size: 0.8125rem; }
+.rel-impressao-titulo { display: none; }
+#rel-imprimir { margin-left: auto; }
+@media print {
+  @page { margin: 14mm; }
+  body { background: #fff !important; }
+  .topo, .barra-relatorio, .aviso, dialog, #tela-login { display: none !important; }
+  #aba-relatorios { display: block !important; }
+  .rel-impressao-titulo { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid #ccc; }
+  .rel-impressao-titulo h2 { margin: 0; font-size: 1.25rem; }
+  .rel-impressao-titulo p { margin: 0.25rem 0 0; color: #555; }
+  .resumo > div, .relatorio-grade > * { break-inside: avoid; box-shadow: none !important; border: 1px solid #ddd; }
+  .relatorio-grade { display: block !important; }
+  .relatorio-grade > * { margin-bottom: 0.75rem; }
+}

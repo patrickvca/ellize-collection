@@ -7,7 +7,7 @@
   var categorias = [];
   var CATEGORIAS_FIXAS = ['feminino', 'masculino'];
   var ATALHOS = ['PP', 'P', 'M', 'G', 'GG', 'Único'];
-  var PAGAMENTOS = { pix: 'Pix', dinheiro: 'Dinheiro', debito: 'Cartão de débito', credito: 'Cartão de crédito', transferencia: 'Transferência', outro: 'Outro', nao_informado: 'Não informado' };
+  var PAGAMENTOS = { pix: 'Pix', boleto: 'Boleto', dinheiro: 'Dinheiro', debito: 'Cartão de débito', credito: 'Cartão de crédito', transferencia: 'Transferência', outro: 'Outro', nao_informado: 'Não informado' };
   var STATUS_FINALIZADO = [['pago', 'Pago'], ['enviado', 'Enviado'], ['entregue', 'Entregue'], ['cancelado', 'Cancelado']];
   var BUCKET = 'produtos';
   var FOTO_PADRAO = 'assets/img/cetim-marfim.webp';
@@ -1254,7 +1254,7 @@
       $('#erro-finalizar').hidden = true;
       $('#finalizar-titulo').textContent = 'Finalizar pedido #' + finalizar.dataset.numero;
       var pedidoAtual = pedidos.filter(function (o) { return o.id === pedidoFinalizando; })[0];
-      $('#form-finalizar').pagamento.value = pedidoAtual.payment_choice === 'pix' ? 'pix' : '';
+      $('#form-finalizar').pagamento.value = pedidoAtual.payment_choice === 'pix' || pedidoAtual.payment_choice === 'boleto' ? pedidoAtual.payment_choice : '';
       var opcaoDinheiro = $('#form-finalizar').pagamento.querySelector('[value="dinheiro"]');
       opcaoDinheiro.disabled = pedidoAtual.delivery !== 'retirada';
       opcaoDinheiro.hidden = opcaoDinheiro.disabled;
@@ -1371,7 +1371,7 @@
     var pedido = pedidos.filter(function (o) { return o.id === pedidoFinalizando; })[0];
     var pagamento = $('#form-finalizar').pagamento.value;
     $('#finalizar-valor').textContent = pagamento
-      ? 'Valor a receber: ' + dinheiro(valorPedido(pedido, ['pix', 'dinheiro', 'transferencia'].indexOf(pagamento) !== -1))
+      ? 'Valor a receber: ' + dinheiro(valorPedido(pedido, ['pix', 'boleto', 'dinheiro', 'transferencia'].indexOf(pagamento) !== -1))
       : 'Cartão ' + dinheiro(valorPedido(pedido, false)) + ' · Pix ' + dinheiro(valorPedido(pedido, true));
   }
   $('#form-finalizar').pagamento.addEventListener('change', mostrarValorFinal);
@@ -1472,6 +1472,13 @@
         return [esc(x.label) + ' (' + variacaoItem({ color: x.color, size: x.size }) + ')', x.quantity, dinheiro(x.revenue)];
       }), true) + '</div>';
   }
+  $('#rel-imprimir').addEventListener('click', function () {
+    var periodo = $('#rel-datas').hidden ? $('#rel-rotulo').textContent
+      : $('#rel-de').value.split('-').reverse().join('/') + ' a ' + $('#rel-ate').value.split('-').reverse().join('/');
+    $('#rel-impressao-titulo').innerHTML = '<img src="../assets/img/logo.svg" alt="" width="120" height="60">' +
+      '<div><h2>Relatório de vendas</h2><p>' + esc(periodo) + ' · gerado em ' + new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) + '</p></div>';
+    window.print();
+  });
   function carregarRelatorio() {
     var tipo = $('#rel-tipo').value;
     var personalizado = tipo === 'personalizado';

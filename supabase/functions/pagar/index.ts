@@ -28,20 +28,35 @@ function formaEsperada(selecionada: string) {
 
 function formaPagamento(tipo: string) {
   if (tipo === 'bank_transfer') return 'pix';
+  if (tipo === 'ticket') return 'boleto';
   if (tipo === 'credit_card') return 'credito';
   if (tipo === 'debit_card' || tipo === 'prepaid_card') return 'debito';
   return 'outro';
 }
 
+// O ViaCEP às vezes fica fora do alcance do Supabase; a BrasilAPI é a reserva.
 async function buscarCep(cep: string | null) {
   if (!cep) return null;
   try {
     const consulta = await fetch('https://viacep.com.br/ws/' + cep + '/json/', { signal: AbortSignal.timeout(4000) });
     const endereco = await consulta.json();
     return endereco.erro ? null : endereco;
+  } catch { /* tenta a reserva */ }
+  try {
+    const consulta = await fetch('https://brasilapi.com.br/api/cep/v1/' + cep, { signal: AbortSignal.timeout(4000) });
+    if (!consulta.ok) return null;
+    const e = await consulta.json();
+    return { logradouro: e.street || '', bairro: e.neighborhood || '', localidade: e.city || '', uf: e.state || '' };
   } catch {
     return null;
   }
+}
+
+// Cidade do pedido: o endereço salvo no pedido vale mais que a consulta do CEP.
+// deno-lint-ignore no-explicit-any
+async function cidadeDoPedido(pedido: any) {
+  if (pedido.address_parts?.city && pedido.address_parts?.state) return { localidade: pedido.address_parts.city, uf: pedido.address_parts.state };
+  return await buscarCep(pedido.cep);
 }
 
 // deno-lint-ignore no-explicit-any
@@ -77,7 +92,7 @@ Deno.serve(async (req) => {
     if (erroSessao || !sessao.user) return responder({ error: 'Entre na sua conta para pagar.' });
 
     const { data: pedido } = await admin.from('orders')
-      .select('id,number,user_id,total_cents,status,stock_deducted,payment_choice,cep,address')
+      .select('id,number,user_id,total_cents,status,stock_deducted,payment_choice,cep,address,address_parts')
       .eq('id', String(corpo.order_id || '')).maybeSingle();
     if (!pedido || pedido.user_id !== sessao.user.id) return responder({ error: 'Pedido não encontrado.' });
 
@@ -87,7 +102,7 @@ Deno.serve(async (req) => {
       const pagamento = pagamentoDaOrder(order);
       const status = STATUS[order.status] || String(order.status);
       const aprovado = status === 'approved';
-      const endereco = aprovado ? await buscarCep(pedido.cep) : null;
+      const endereco = aprovado ? await cidadeDoPedido(pedido) : null;
       const pago = Number(order.total_paid_amount || pagamento.paid_amount || pagamento.amount || 0);
       const { error } = await admin.rpc('mp_register_payment', {
         p_order: pedido.id,
@@ -146,14 +161,15 @@ Deno.serve(async (req) => {
       metodo = { id: 'boleto', type: 'ticket' };
       // O boleto exige CPF e endereço. Sem endereço no formulário, usa o CEP do pedido.
       const doFormulario = pagador.address || {};
-      const viaCep = await buscarCep(pedido.cep);
+      const partes = pedido.address_parts || {};
+      const viaCep = partes.street ? null : await buscarCep(pedido.cep);
       payer.address = {
         zip_code: String(doFormulario.zip_code || pedido.cep || '').replace(/\D/g, ''),
-        street_name: doFormulario.street_name || viaCep?.logradouro || 'Não informado',
-        street_number: doFormulario.street_number || 'S/N',
-        neighborhood: doFormulario.neighborhood || viaCep?.bairro || 'Não informado',
-        city: doFormulario.city || viaCep?.localidade || '',
-        state: doFormulario.federal_unit || doFormulario.state || viaCep?.uf || '',
+        street_name: doFormulario.street_name || partes.street || viaCep?.logradouro || 'Não informado',
+        street_number: doFormulario.street_number || partes.number || 'S/N',
+        neighborhood: doFormulario.neighborhood || partes.district || viaCep?.bairro || 'Não informado',
+        city: doFormulario.city || partes.city || viaCep?.localidade || '',
+        state: doFormulario.federal_unit || doFormulario.state || partes.state || viaCep?.uf || '',
       };
     }
 

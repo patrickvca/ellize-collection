@@ -7,8 +7,8 @@
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#2c070a">
   <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="../assets/css/tokens.css?v=20261116a">
-  <link rel="stylesheet" href="admin.css?v=20261116a">
+  <link rel="stylesheet" href="../assets/css/tokens.css?v=20261116b">
+  <link rel="stylesheet" href="admin.css?v=20261116b">
 </head>
 <body>
   <main class="login" id="tela-login" hidden>
@@ -96,7 +96,9 @@
             <label class="campo">De<input id="rel-de" type="date"></label>
             <label class="campo">Até<input id="rel-ate" type="date"></label>
           </div>
+          <button class="botao botao-linha" type="button" id="rel-imprimir">Imprimir ou salvar PDF</button>
         </div>
+        <div class="rel-impressao-titulo" id="rel-impressao-titulo"></div>
         <div id="relatorio" aria-live="polite"></div>
       </section>
 
@@ -199,6 +201,7 @@
           <select name="pagamento" required>
             <option value="">Selecione</option>
             <option value="pix">Pix</option>
+            <option value="boleto">Boleto</option>
             <option value="dinheiro">Dinheiro</option>
             <option value="debito">Cartão de débito</option>
             <option value="credito">Cartão de crédito</option>
@@ -228,6 +231,6 @@
   <div class="aviso" id="aviso" role="status" hidden></div>
 
   <script src="../assets/vendor/supabase-2.119.0.js" defer></script>
-  <script src="admin.js?v=20261116a" defer></script>
+  <script src="admin.js?v=20261116b" defer></script>
 </body>
 </html>
