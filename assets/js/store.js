@@ -1273,7 +1273,15 @@
       return Math.max(0, bruto - o.credit_cents);
     }
     function desenhar(o) {
-      alvo.innerHTML = '<div class="pagamento-grade"><form class="formulario" id="form-pagamento" novalidate>' +
+      // As peças ficam reservadas por 1 hora depois de fechar o pedido; no boleto, 5 dias (private.liberar_reservas).
+      var boleto = o.payment_choice === 'boleto';
+      var reservaAte = o.stock_reserved ? new Date(new Date(o.created_at).getTime() + (boleto ? 5 * 24 : 1) * 60 * 60 * 1000) : null;
+      var aviso = reservaAte && reservaAte > new Date()
+        ? '<p class="mensagem mensagem-sucesso">Suas peças estão reservadas até ' +
+          (boleto ? reservaAte.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' às ' : '') +
+          reservaAte.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + '. Depois disso, voltam para a loja e podem esgotar.</p>'
+        : '';
+      alvo.innerHTML = '<div class="pagamento-grade"><form class="formulario" id="form-pagamento" novalidate>' + aviso +
         '<fieldset class="formas"><legend>Como você quer pagar o pedido #' + esc(o.number) + '?</legend>' +
         ['pix', 'cartao', 'boleto'].map(function (forma) {
           return '<label class="forma"><input type="radio" name="forma" value="' + forma + '">' +
