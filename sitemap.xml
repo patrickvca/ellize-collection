@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://ellizecollection.com.br/</loc><lastmod>2026-11-05</lastmod><priority>1.0</priority></url>
-  <url><loc>https://ellizecollection.com.br/loja.html</loc><lastmod>2026-11-05</lastmod><priority>0.9</priority></url>
+  <url><loc>https://ellizecollection.com.br/</loc><lastmod>2026-11-18</lastmod><priority>1.0</priority></url>
+  <url><loc>https://ellizecollection.com.br/loja.html</loc><lastmod>2026-11-18</lastmod><priority>0.9</priority></url>
   <url><loc>https://ellizecollection.com.br/loja.html?c=feminino</loc><priority>0.8</priority></url>
-  <url><loc>https://ellizecollection.com.br/loja.html?c=conjuntos</loc><priority>0.8</priority></url>
   <url><loc>https://ellizecollection.com.br/loja.html?c=vestidos</loc><priority>0.8</priority></url>
+  <url><loc>https://ellizecollection.com.br/loja.html?c=conjuntos</loc><priority>0.8</priority></url>
+  <url><loc>https://ellizecollection.com.br/produto.html?p=vestido-duplo-71ebx</loc><lastmod>2026-11-18</lastmod><priority>0.7</priority></url>
   <url><loc>https://ellizecollection.com.br/produto.html?p=vestido-amanhecer-dlhmg</loc><lastmod>2026-11-05</lastmod><priority>0.7</priority></url>
   <url><loc>https://ellizecollection.com.br/produto.html?p=conjunto-seda-brane</loc><lastmod>2026-11-05</lastmod><priority>0.7</priority></url>
   <url><loc>https://ellizecollection.com.br/produto.html?p=vestido-nuki-ksh2k</loc><lastmod>2026-11-05</lastmod><priority>0.7</priority></url>
