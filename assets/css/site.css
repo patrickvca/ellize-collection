@@ -122,6 +122,8 @@ section[id] { scroll-margin-top: calc(var(--header-h) + 24px); }
   border: 6px solid var(--creme); border-radius: var(--raio-m); box-shadow: 0 24px 48px rgb(44 7 10 / 0.4);
 }
 .hero-foto-principal { top: 0; right: 0; height: 100%; }
+.hero-fotos img { transition: opacity 0.3s ease; }
+.js .hero-fotos.esperando img { opacity: 0; }
 .hero-foto-apoio { bottom: -1.5rem; left: 0; z-index: 1; height: 68%; transform: rotate(-4deg); }
 .hero-selo {
   position: absolute; top: 6%; left: 14%; z-index: 2; display: grid; place-items: center;

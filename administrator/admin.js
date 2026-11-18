@@ -125,12 +125,142 @@
     botao.addEventListener('click', function () {
       document.querySelectorAll('[data-aba]').forEach(function (b) { b.removeAttribute('aria-current'); });
       botao.setAttribute('aria-current', 'page');
-      ['produtos', 'pedidos', 'trocas', 'clientes', 'categorias', 'relatorios'].forEach(function (aba) {
+      ['produtos', 'pedidos', 'trocas', 'clientes', 'categorias', 'banner', 'relatorios'].forEach(function (aba) {
         $('#aba-' + aba).hidden = botao.dataset.aba !== aba;
       });
       if (botao.dataset.aba === 'relatorios') carregarRelatorio();
       if (botao.dataset.aba === 'trocas') carregarTrocas();
       if (botao.dataset.aba === 'clientes') carregarClientes();
+      if (botao.dataset.aba === 'banner') carregarBanner();
+    });
+  });
+
+  /* Banner da página inicial */
+  var BANNER_PADRAO = { 1: '../assets/img/banner-vermelho.webp', 2: '../assets/img/banner-zebra.webp' };
+  var bannerSalvo = { foto1: null, foto2: null };
+  var bannerNovo = {};
+  var bannerCarregado = false;
+  function urlAbsoluta(url) { return new URL(url, location.href).href; }
+  function bannerAtual(n) {
+    var novo = bannerNovo[n];
+    if (novo === 'padrao') return BANNER_PADRAO[n];
+    if (novo) return novo.previa;
+    return bannerSalvo['foto' + n] || BANNER_PADRAO[n];
+  }
+  function desenharBanner() {
+    var mudou = !!(bannerNovo[1] || bannerNovo[2]);
+    [1, 2].forEach(function (n) {
+      $('#banner-img-' + n).src = bannerAtual(n);
+      var novo = bannerNovo[n];
+      $('#banner-situacao-' + n).textContent = novo === 'padrao' ? 'Vai voltar à foto original (ainda não publicado)'
+        : novo ? 'Foto nova (ainda não publicada)' : bannerSalvo['foto' + n] ? 'Foto escolhida no painel' : 'Foto original da loja';
+      document.querySelector('[data-banner-ajustar="' + n + '"]').hidden = !(novo && novo.original);
+      document.querySelector('[data-banner-padrao="' + n + '"]').hidden = novo === 'padrao' || (!novo && !bannerSalvo['foto' + n]);
+    });
+    $('#banner-publicar').disabled = !mudou;
+    $('#banner-descartar').disabled = !mudou;
+    $('#banner-estado').textContent = mudou ? 'Há alterações que ainda não estão no site. Confira a prévia e clique em Publicar banner.' : 'Nenhuma alteração. A prévia mostra o banner que está no site.';
+    enviarPreviaBanner();
+  }
+  function enviarPreviaBanner() {
+    var dados = { tipo: 'banner', foto1: urlAbsoluta(bannerAtual(1)), foto2: urlAbsoluta(bannerAtual(2)) };
+    ['#previa-celular', '#previa-computador'].forEach(function (id) {
+      var quadro = $(id);
+      if (quadro.contentWindow) quadro.contentWindow.postMessage(dados, location.origin);
+    });
+  }
+  window.addEventListener('message', function (evento) {
+    if (evento.origin === location.origin && evento.data && evento.data.tipo === 'banner-pronto') enviarPreviaBanner();
+  });
+  function ajustarPrevias() {
+    document.querySelectorAll('.previa-tela').forEach(function (tela) {
+      var largura = +tela.dataset.largura, altura = +tela.dataset.altura;
+      var limite = tela.classList.contains('previa-celular') ? 260 : tela.parentNode.clientWidth;
+      var escala = Math.min(1, limite / largura);
+      tela.style.width = Math.round(largura * escala) + 'px';
+      tela.style.height = Math.round(altura * escala) + 'px';
+      tela.querySelector('iframe').style.transform = 'scale(' + escala + ')';
+    });
+  }
+  window.addEventListener('resize', function () { if (!$('#aba-banner').hidden) ajustarPrevias(); });
+  function carregarBanner() {
+    if (!bannerCarregado) {
+      bannerCarregado = true;
+      $('#previa-celular').src = '../index.html?previa=banner';
+      $('#previa-computador').src = '../index.html?previa=banner';
+    }
+    requestAnimationFrame(ajustarPrevias);
+    return sb.from('site_settings').select('value').eq('key', 'banner').maybeSingle().then(function (r) {
+      if (r.error) { $('#banner-estado').textContent = 'Não foi possível carregar o banner.'; return; }
+      var valor = (r.data && r.data.value) || {};
+      bannerSalvo = { foto1: valor.foto1 || null, foto2: valor.foto2 || null };
+      desenharBanner();
+    });
+  }
+  $('#aba-banner').addEventListener('change', function (evento) {
+    var campo = evento.target.closest('[data-banner-arquivo]');
+    if (!campo) return;
+    var n = +campo.dataset.bannerArquivo;
+    var arquivo = campo.files[0];
+    campo.value = '';
+    if (!arquivo || !fotoValida(arquivo)) return;
+    enquadrar(arquivo).then(function (enquadrada) {
+      if (!enquadrada) return;
+      bannerNovo[n] = { arquivo: enquadrada, original: arquivo, previa: URL.createObjectURL(enquadrada) };
+      desenharBanner();
+    });
+  });
+  $('#aba-banner').addEventListener('click', function (evento) {
+    var ajustar = evento.target.closest('[data-banner-ajustar]');
+    var padrao = evento.target.closest('[data-banner-padrao]');
+    if (ajustar) {
+      var n = +ajustar.dataset.bannerAjustar;
+      enquadrar(bannerNovo[n].original).then(function (enquadrada) {
+        if (!enquadrada) return;
+        bannerNovo[n].arquivo = enquadrada;
+        bannerNovo[n].previa = URL.createObjectURL(enquadrada);
+        desenharBanner();
+      });
+    }
+    if (padrao) {
+      bannerNovo[+padrao.dataset.bannerPadrao] = 'padrao';
+      desenharBanner();
+    }
+  });
+  $('#banner-descartar').addEventListener('click', function () {
+    bannerNovo = {};
+    desenharBanner();
+  });
+  $('#banner-publicar').addEventListener('click', function () {
+    var botao = this;
+    if (!window.confirm('Publicar o novo banner na página inicial do site?')) return;
+    botao.disabled = true;
+    botao.textContent = 'Publicando…';
+    var antigo = { foto1: bannerSalvo.foto1, foto2: bannerSalvo.foto2 };
+    var enviadas = [];
+    Promise.all([1, 2].map(function (n) {
+      var novo = bannerNovo[n];
+      if (novo === 'padrao') return Promise.resolve(null);
+      if (!novo) return Promise.resolve(antigo['foto' + n]);
+      return enviarFoto(novo.arquivo).then(function (url) { enviadas.push(url); return url; });
+    })).then(function (urls) {
+      var valor = { foto1: urls[0], foto2: urls[1] };
+      return sb.from('site_settings').update({ value: valor, updated_at: new Date().toISOString() }).eq('key', 'banner').select('key').then(function (r) {
+        if (r.error || !r.data || !r.data.length) throw r.error || new Error('banner');
+        // Fotos antigas do painel que saíram do banner são apagadas do armazenamento.
+        ['foto1', 'foto2'].forEach(function (chave) {
+          if (antigo[chave] && antigo[chave] !== valor.foto1 && antigo[chave] !== valor.foto2) removerFoto(antigo[chave]);
+        });
+        bannerSalvo = valor;
+        bannerNovo = {};
+        avisar('Banner publicado. Já aparece na página inicial.');
+      });
+    }).catch(function () {
+      enviadas.forEach(removerFoto);
+      avisar('Não foi possível publicar o banner. Tente de novo.');
+    }).then(function () {
+      botao.textContent = 'Publicar banner';
+      desenharBanner();
     });
   });
 

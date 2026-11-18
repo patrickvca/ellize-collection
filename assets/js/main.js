@@ -305,6 +305,40 @@
     desenharLista();
   });
 
+  /* Banner da página inicial: as fotos escolhidas no painel ficam em site_settings ('banner').
+     Na prévia do painel (?previa=banner), as fotos chegam por mensagem, antes de publicar. */
+  (function banner() {
+    var caixa = document.querySelector('.hero-fotos');
+    if (!caixa) return;
+    var fotos = [caixa.querySelector('.hero-foto-principal'), caixa.querySelector('.hero-foto-apoio')];
+    var previa = new URLSearchParams(location.search).get('previa') === 'banner';
+    function mostrar() { caixa.classList.remove('esperando'); }
+    function aplicar(dados, padraoSeVazio) {
+      ['foto1', 'foto2'].forEach(function (chave, i) {
+        var url = dados[chave] || (padraoSeVazio ? fotos[i].dataset.padrao : null);
+        if (!url || fotos[i].getAttribute('src') === url) return;
+        fotos[i].src = url;
+        fotos[i].alt = url === fotos[i].dataset.padrao ? fotos[i].alt : 'Novidades da Ellize Collection';
+      });
+    }
+    if (previa) {
+      window.addEventListener('message', function (evento) {
+        if (evento.origin !== location.origin || !evento.data || evento.data.tipo !== 'banner') return;
+        aplicar(evento.data, true);
+        mostrar();
+        // No celular as fotos ficam abaixo do texto: a prévia rola até elas.
+        if (window.innerWidth < 900) caixa.scrollIntoView({ block: 'center' });
+      });
+      if (window.parent !== window) window.parent.postMessage({ tipo: 'banner-pronto' }, location.origin);
+    }
+    var espera = setTimeout(mostrar, 1500);
+    fetch(CONFIG.url + '/rest/v1/site_settings?select=value&key=eq.banner', { headers: { apikey: CONFIG.chave } })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (linhas) { if (!previa) aplicar((linhas[0] && linhas[0].value) || {}, false); })
+      .catch(function () {})
+      .then(function () { clearTimeout(espera); mostrar(); });
+  })();
+
   window.Ellize = {
     config: CONFIG, esc: esc, dinheiro: dinheiro, icone: icone,
     produtos: produtos, categorias: categorias, sugestoes: sugestoes, adicionar: adicionar, registrarVisita: registrarVisita,

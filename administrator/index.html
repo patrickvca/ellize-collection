@@ -7,8 +7,8 @@
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#2c070a">
   <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="../assets/css/tokens.css?v=20261118a">
-  <link rel="stylesheet" href="admin.css?v=20261118a">
+  <link rel="stylesheet" href="../assets/css/tokens.css?v=20261118c">
+  <link rel="stylesheet" href="admin.css?v=20261118c">
 </head>
 <body>
   <main class="login" id="tela-login" hidden>
@@ -31,6 +31,7 @@
         <button type="button" data-aba="trocas">Trocas</button>
         <button type="button" data-aba="clientes">Clientes</button>
         <button type="button" data-aba="categorias">Categorias</button>
+        <button type="button" data-aba="banner">Banner</button>
         <button type="button" data-aba="relatorios">Relatórios</button>
       </nav>
       <div class="topo-acoes">
@@ -76,6 +77,47 @@
         </form>
         <p class="dica">Feminino e Masculino são fixas e aceitam só a foto de capa. O departamento de cada categoria define em qual coluna ela aparece em Coleções, no menu. As outras aparecem em Escolha por categoria: arraste pela alça ou use as setas para definir a ordem. Sem capa, o site usa a foto de um produto ou uma textura.</p>
         <ul class="categorias" id="lista-categorias"></ul>
+      </section>
+
+      <section id="aba-banner" hidden>
+        <p class="dica">Troque uma ou as duas fotos do banner da página inicial. Confira na prévia como fica no celular e no computador e só então publique.</p>
+        <div class="banner-fotos">
+        <div class="banner-foto">
+          <img id="banner-img-1" alt="Foto 1 do banner" width="96" height="120">
+          <div class="banner-foto-info">
+            <strong>Foto 1</strong>
+            <span class="dica">A foto grande, à direita do banner.</span>
+            <span class="banner-situacao" id="banner-situacao-1"></span>
+            <label class="foto-botao"><input type="file" accept="image/jpeg,image/png,image/webp" data-banner-arquivo="1"><span>Trocar foto</span></label>
+            <button class="botao-texto" type="button" data-banner-ajustar="1" hidden>Ajustar enquadramento</button>
+            <button class="botao-texto" type="button" data-banner-padrao="1">Voltar à foto original da loja</button>
+          </div>
+        </div>
+        <div class="banner-foto">
+          <img id="banner-img-2" alt="Foto 2 do banner" width="96" height="120">
+          <div class="banner-foto-info">
+            <strong>Foto 2</strong>
+            <span class="dica">A foto menor, inclinada na frente da grande.</span>
+            <span class="banner-situacao" id="banner-situacao-2"></span>
+            <label class="foto-botao"><input type="file" accept="image/jpeg,image/png,image/webp" data-banner-arquivo="2"><span>Trocar foto</span></label>
+            <button class="botao-texto" type="button" data-banner-ajustar="2" hidden>Ajustar enquadramento</button>
+            <button class="botao-texto" type="button" data-banner-padrao="2">Voltar à foto original da loja</button>
+          </div>
+        </div>
+        </div>
+        <div class="banner-previas">
+          <figure class="banner-previa"><figcaption>Prévia no celular</figcaption>
+            <div class="previa-tela previa-celular" data-largura="390" data-altura="780"><iframe id="previa-celular" title="Prévia do banner no celular" width="390" height="780" tabindex="-1"></iframe></div>
+          </figure>
+          <figure class="banner-previa"><figcaption>Prévia no computador</figcaption>
+            <div class="previa-tela previa-computador" data-largura="1366" data-altura="800"><iframe id="previa-computador" title="Prévia do banner no computador" width="1366" height="800" tabindex="-1"></iframe></div>
+          </figure>
+        </div>
+        <p class="nota-pequena" id="banner-estado">Nenhuma alteração.</p>
+        <div class="banner-acoes">
+          <button class="botao botao-linha" type="button" id="banner-descartar" disabled>Descartar alterações</button>
+          <button class="botao botao-vinho" type="button" id="banner-publicar" disabled>Publicar banner</button>
+        </div>
       </section>
 
       <section id="aba-relatorios" hidden>
@@ -250,6 +292,6 @@
   <div class="aviso" id="aviso" role="status" hidden></div>
 
   <script src="../assets/vendor/supabase-2.119.0.js" defer></script>
-  <script src="admin.js?v=20261118a" defer></script>
+  <script src="admin.js?v=20261118c" defer></script>
 </body>
 </html>

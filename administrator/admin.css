@@ -289,3 +289,16 @@ body.arrastando-categoria, body.arrastando-categoria * { cursor: grabbing !impor
 .recorte-atalhos { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem 1rem; }
 .foto-ajustar { position: absolute; left: 2px; bottom: 2px; padding: 0 0.25rem; border: 0; border-radius: 4px; background: rgb(255 255 255 / 0.9); color: var(--vinho); font-size: 0.6875rem; cursor: pointer; }
 #foto-ajustar { justify-self: start; }
+.banner-fotos { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-block: 1rem; }
+.banner-foto { display: flex; gap: 1rem; align-items: flex-start; padding: 1rem; border-radius: var(--raio-s); background: #fff; }
+.banner-foto img { flex: none; width: 96px; height: 120px; object-fit: cover; border-radius: var(--raio-s); }
+.banner-foto-info { display: grid; gap: 0.375rem; justify-items: start; }
+.banner-situacao { font-size: 0.8125rem; font-weight: 600; color: var(--vinho); }
+.banner-previas { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: flex-start; }
+.banner-previa { margin: 0; display: grid; gap: 0.5rem; }
+.banner-previa:last-child { flex: 1; min-width: 260px; }
+.banner-previa figcaption { font-weight: 600; }
+.previa-tela { position: relative; overflow: hidden; border: 1px solid var(--linha); border-radius: var(--raio-s); background: #fff; }
+.previa-celular { border-radius: 18px; border-width: 6px; border-color: var(--tinta); }
+.previa-tela iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; pointer-events: none; }
+.banner-acoes { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem; }
