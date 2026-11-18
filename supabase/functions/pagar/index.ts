@@ -9,6 +9,8 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 const CARTOES = ['credit_card', 'debit_card', 'prepaid_card'];
+// Nome que aparece na fatura do cartão do cliente.
+const NOME_FATURA = 'ELLIZE COLLECTION';
 // Status da order traduzidos para os status usados pela loja.
 const STATUS = {
   processed: 'approved', failed: 'rejected', action_required: 'pending', processing: 'in_process',
@@ -174,6 +176,7 @@ Deno.serve(async (req) => {
         type: selecionada === 'prepaid_card' ? 'debit_card' : selecionada,
         token: String(dados.token || ''),
         installments: Number(dados.installments) || 1,
+        statement_descriptor: NOME_FATURA,
       };
     } else if (forma === 'pix') {
       metodo = { id: 'pix', type: 'bank_transfer' };
@@ -193,7 +196,7 @@ Deno.serve(async (req) => {
       };
     }
 
-    const resposta = await fetch('https://api.mercadopago.com/v1/orders', {
+    const criarOrder = () => fetch('https://api.mercadopago.com/v1/orders', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -210,7 +213,15 @@ Deno.serve(async (req) => {
         transactions: { payments: [{ amount: valor, payment_method: metodo }] },
       }),
     });
-    const order = await resposta.json();
+    let resposta = await criarOrder();
+    let order = await resposta.json();
+    // Se o Mercado Pago recusar o nome da fatura, o pagamento segue sem ele (o cliente não é prejudicado).
+    if (resposta.status === 400 && metodo.statement_descriptor && JSON.stringify(order).includes('statement_descriptor')) {
+      console.error('Nome da fatura recusado', JSON.stringify(order));
+      delete metodo.statement_descriptor;
+      resposta = await criarOrder();
+      order = await resposta.json();
+    }
     if (!resposta.ok) {
       console.error('Mercado Pago respondeu', resposta.status, JSON.stringify(order));
       // Cartão recusado pode vir como erro com a order dentro; nesse caso devolve o motivo.
