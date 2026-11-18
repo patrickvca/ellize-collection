@@ -1367,11 +1367,11 @@
         area.hidden = true;
         form.hidden = false;
       });
-      carregarSdk().then(function () {
+      Promise.all([carregarSdk(), dadosPagador(o, forma)]).then(function (prontos) {
         var mp = new window.MercadoPago(chave, { locale: 'pt-BR' });
         $('#paymentBrick_container').innerHTML = '';
         return mp.bricks().create('payment', 'paymentBrick_container', {
-          initialization: { amount: total / 100, payer: { email: emailCliente } },
+          initialization: { amount: total / 100, payer: prontos[1] },
           customization: { paymentMethods: METODOS[forma] },
           callbacks: {
             onReady: function () {},
@@ -1382,6 +1382,33 @@
       }).then(function (controle) { controleBrick = controle; }, function () {
         $('#paymentBrick_container').innerHTML = '';
         erroBrick('Não foi possível carregar o pagamento. Verifique sua conexão e recarregue a página.');
+      });
+    }
+    // Preenche o formulário do Mercado Pago com o que o pedido já tem: nome, CPF e endereço.
+    // Sem endereço salvo (retirada na loja), o boleto busca rua, bairro e cidade pelo CEP do pedido.
+    function dadosPagador(o, forma) {
+      var payer = { email: emailCliente };
+      var nome = String(o.customer_name || '').trim().split(/\s+/).filter(Boolean);
+      if (nome.length) payer.firstName = nome[0];
+      if (nome.length > 1) payer.lastName = nome.slice(1).join(' ');
+      if (o.cpf) payer.identification = { type: 'CPF', number: o.cpf };
+      if (forma !== 'boleto' || !o.cep) return Promise.resolve(payer);
+      var p = o.address_parts;
+      var endereco = p && p.street ? Promise.resolve(p)
+        : buscarCep(o.cep).then(function (e) {
+          return e && !e.erro ? { street: e.logradouro, district: e.bairro, city: e.localidade, state: e.uf } : null;
+        }, function () { return null; });
+      return endereco.then(function (e) {
+        payer.address = {
+          zipCode: o.cep,
+          federalUnit: (e && e.state) || '',
+          city: (e && e.city) || '',
+          neighborhood: (e && e.district) || '',
+          streetName: (e && e.street) || '',
+          streetNumber: (e && e.number) || '',
+          complement: (e && e.complement) || ''
+        };
+        return payer;
       });
     }
     function erroBrick(texto) {
