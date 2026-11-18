@@ -7,8 +7,8 @@
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#2c070a">
   <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="../assets/css/tokens.css?v=20261116g">
-  <link rel="stylesheet" href="admin.css?v=20261116g">
+  <link rel="stylesheet" href="../assets/css/tokens.css?v=20261118a">
+  <link rel="stylesheet" href="admin.css?v=20261118a">
 </head>
 <body>
   <main class="login" id="tela-login" hidden>
@@ -134,7 +134,8 @@
               <input id="foto" type="file" accept="image/jpeg,image/png,image/webp">
               <span id="foto-botao-texto">Escolher foto</span>
             </label>
-            <p class="foto-dica">JPG, PNG ou WebP. O corte é feito na proporção da loja (4:5), como na prévia.</p>
+            <button class="botao-texto" type="button" id="foto-ajustar" hidden>Ajustar enquadramento</button>
+            <p class="foto-dica">JPG, PNG ou WebP. Ao escolher, você arrasta e dá zoom para definir o enquadramento no formato da loja (4:5).</p>
           </div>
         </div>
         <p class="mensagem mensagem-erro" id="foto-erro" role="alert" hidden></p>
@@ -189,6 +190,24 @@
     </form>
   </dialog>
 
+  <dialog class="editor recorte" id="recorte" aria-labelledby="recorte-titulo">
+    <div class="editor-topo"><h2 id="recorte-titulo">Enquadrar a foto</h2></div>
+    <div class="editor-corpo">
+      <p class="dica">Arraste a foto para escolher a parte que aparece. Use o zoom para aproximar ou afastar; afastando, sobra fundo branco em volta.</p>
+      <div class="recorte-moldura" id="recorte-moldura"><img id="recorte-imagem" alt="Foto sendo enquadrada" draggable="false"></div>
+      <label class="recorte-zoom">Zoom<input id="recorte-zoom" type="range" min="0" max="1000" value="0" aria-label="Zoom da foto"></label>
+      <div class="recorte-atalhos">
+        <button class="botao-texto" type="button" data-recorte="inteira">Mostrar a foto inteira</button>
+        <button class="botao-texto" type="button" data-recorte="preencher">Preencher o quadro</button>
+      </div>
+      <p class="nota-pequena" id="recorte-conta" hidden></p>
+    </div>
+    <div class="editor-rodape">
+      <button class="botao botao-linha" type="button" data-recorte="cancelar">Cancelar</button>
+      <button class="botao botao-vinho" type="button" data-recorte="usar">Usar esta foto</button>
+    </div>
+  </dialog>
+
   <dialog class="editor finalizar" id="finalizar" aria-labelledby="finalizar-titulo">
     <form id="form-finalizar" novalidate>
       <div class="editor-topo">
@@ -231,6 +250,6 @@
   <div class="aviso" id="aviso" role="status" hidden></div>
 
   <script src="../assets/vendor/supabase-2.119.0.js" defer></script>
-  <script src="admin.js?v=20261116g" defer></script>
+  <script src="admin.js?v=20261118a" defer></script>
 </body>
 </html>

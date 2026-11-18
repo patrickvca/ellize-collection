@@ -16,6 +16,7 @@
   var pedidos = [];
   var editando = null;
   var fotoNova = null;
+  var fotoOriginal = null;
   var FOTO_LARGURA = 1200;
   var FOTO_PROPORCAO = 4 / 5;
   var FOTO_FOCO_Y = 0.35;
@@ -447,11 +448,16 @@
     if (evento.target.matches('[data-capa]')) {
       var alvoCapa = categorias.filter(function (c) { return c.slug === evento.target.dataset.capa; })[0];
       var arquivoCapa = evento.target.files[0];
-      if (!arquivoCapa) return;
-      avisar('Enviando a capa…');
-      enviarFoto(arquivoCapa).then(function (url) {
+      evento.target.value = '';
+      if (!arquivoCapa || !fotoValida(arquivoCapa)) return;
+      enquadrar(arquivoCapa).then(function (enquadrada) {
+        if (!enquadrada) return null;
+        avisar('Enviando a capa…');
+        return enviarFoto(enquadrada);
+      }).then(function (url) {
+        if (!url) return 'sem';
         return salvarCapa(alvoCapa, url).catch(function (erro) { removerFoto(url); throw erro; });
-      }).then(function () { avisar('Capa salva.'); }, function () {
+      }).then(function (r) { if (r !== 'sem') avisar('Capa salva.'); }, function () {
         avisar('Não foi possível salvar a capa.');
         desenharCategorias();
       });
@@ -544,6 +550,7 @@
       fotos.map(function (f, fi) {
         return '<figure class="foto-item"><img src="' + esc(f.previa || fotoSrc(f.url)) + '" alt="" width="64" height="80">' +
           '<button class="foto-tirar" type="button" data-tirar-foto="' + chave + ':' + fi + '" aria-label="Remover foto ' + (fi + 1) + nomeCor + '">×</button>' +
+          (f.original ? '<button class="foto-ajustar" type="button" data-ajustar-foto="' + chave + ':' + fi + '">Ajustar</button>' : '') +
           (fi === 0 ? '<span class="foto-principal">Primeira</span>'
             : '<button class="foto-tornar" type="button" data-principal="' + chave + ':' + fi + '">Tornar primeira</button>') + '</figure>';
       }).join('') +
@@ -560,18 +567,33 @@
   }
   function adicionarFotosCor(chave, arquivos) {
     var validos = [].filter.call(arquivos, fotoValida);
-    if (!validos.length) return;
-    lerGrade();
-    validos.forEach(function (arquivo) {
-      listaDeFotos(String(chave)).push({ arquivo: arquivo, previa: URL.createObjectURL(arquivo) });
+    validos.forEach(function (arquivo, i) {
+      enquadrar(arquivo, validos.length > 1 ? 'Foto ' + (i + 1) + ' de ' + validos.length : '').then(function (enquadrada) {
+        if (!enquadrada) return;
+        lerGrade();
+        listaDeFotos(String(chave)).push({ arquivo: enquadrada, original: arquivo, previa: URL.createObjectURL(enquadrada) });
+        desenharGrade();
+      });
     });
-    desenharGrade();
   }
   $('#fotos-cores').addEventListener('change', function (evento) {
     var campo = evento.target.closest('[data-foto-cor]');
     if (campo) adicionarFotosCor(campo.dataset.fotoCor, campo.files);
   });
   $('#fotos-cores').addEventListener('click', function (evento) {
+    var ajustar = evento.target.closest('[data-ajustar-foto]');
+    if (ajustar) {
+      var alvo = ajustar.dataset.ajustarFoto.split(':');
+      var item = listaDeFotos(alvo[0])[+alvo[1]];
+      enquadrar(item.original).then(function (enquadrada) {
+        if (!enquadrada) return;
+        lerGrade();
+        item.arquivo = enquadrada;
+        item.previa = URL.createObjectURL(enquadrada);
+        desenharGrade();
+      });
+      return;
+    }
     var tirar = evento.target.closest('[data-tirar-foto]');
     var principal = evento.target.closest('[data-principal]');
     if (!tirar && !principal) return;
@@ -701,6 +723,8 @@
   function abrirEditor(p) {
     editando = p || null;
     fotoNova = null;
+    fotoOriginal = null;
+    $('#foto-ajustar').hidden = true;
     form.reset();
     $('#foto').value = '';
     $('#foto-erro').hidden = true;
@@ -750,11 +774,19 @@
   }
   function escolherFoto(arquivo) {
     if (!arquivo || !fotoValida(arquivo)) return;
-    fotoNova = arquivo;
-    $('#foto-previa').src = URL.createObjectURL(arquivo);
-    $('#foto-texto').textContent = arquivo.name;
-    $('#foto-botao-texto').textContent = 'Trocar foto';
+    enquadrar(arquivo).then(function (enquadrada) {
+      if (!enquadrada) return;
+      fotoNova = enquadrada;
+      fotoOriginal = arquivo;
+      $('#foto-previa').src = URL.createObjectURL(enquadrada);
+      $('#foto-texto').textContent = arquivo.name;
+      $('#foto-botao-texto').textContent = 'Trocar foto';
+      $('#foto-ajustar').hidden = false;
+    });
   }
+  $('#foto-ajustar').addEventListener('click', function () {
+    if (fotoOriginal) escolherFoto(fotoOriginal);
+  });
   $('#foto').addEventListener('change', function () {
     escolherFoto(this.files[0]);
     this.value = '';
@@ -772,6 +804,138 @@
   areaFoto.addEventListener('drop', function (evento) {
     escolherFoto(evento.dataTransfer.files[0]);
   });
+  /* Enquadramento: a pessoa arrasta e dá zoom na foto dentro do quadro 4:5 da loja.
+     Devolve um arquivo já recortado (ou null se cancelar). Afastando além do quadro, sobra fundo branco. */
+  var recorte = $('#recorte');
+  var rMoldura = $('#recorte-moldura');
+  var rImagem = $('#recorte-imagem');
+  var rZoom = $('#recorte-zoom');
+  var rEstado = null;
+  var rToques = {};
+  function rAplicar() {
+    var e = rEstado;
+    var lw = e.iw * e.s, lh = e.ih * e.s;
+    e.x = Math.min(Math.max(e.x, Math.min(0, e.W - lw)), Math.max(0, e.W - lw));
+    e.y = Math.min(Math.max(e.y, Math.min(0, e.H - lh)), Math.max(0, e.H - lh));
+    rImagem.style.width = lw + 'px';
+    rImagem.style.height = lh + 'px';
+    rImagem.style.transform = 'translate(' + e.x + 'px,' + e.y + 'px)';
+  }
+  function rEscala(nova, cx, cy) {
+    var e = rEstado;
+    nova = Math.min(Math.max(nova, e.min), e.max);
+    cx = cx == null ? e.W / 2 : cx;
+    cy = cy == null ? e.H / 2 : cy;
+    e.x = cx - (cx - e.x) * nova / e.s;
+    e.y = cy - (cy - e.y) * nova / e.s;
+    e.s = nova;
+    rZoom.value = Math.round((Math.log(nova / e.min) / Math.log(e.max / e.min)) * 1000);
+    rAplicar();
+  }
+  function rCentralizar(escala, focoY) {
+    var e = rEstado;
+    e.s = escala;
+    e.x = (e.W - e.iw * escala) / 2;
+    e.y = (e.H - e.ih * escala) * focoY;
+    rEscala(escala);
+  }
+  rZoom.addEventListener('input', function () {
+    var e = rEstado;
+    if (e) rEscala(e.min * Math.pow(e.max / e.min, rZoom.value / 1000));
+  });
+  rMoldura.addEventListener('wheel', function (evento) {
+    if (!rEstado) return;
+    evento.preventDefault();
+    var caixa = rMoldura.getBoundingClientRect();
+    rEscala(rEstado.s * (evento.deltaY < 0 ? 1.08 : 1 / 1.08), evento.clientX - caixa.left, evento.clientY - caixa.top);
+  }, { passive: false });
+  rMoldura.addEventListener('pointerdown', function (evento) {
+    if (!rEstado) return;
+    rMoldura.setPointerCapture(evento.pointerId);
+    rToques[evento.pointerId] = { x: evento.clientX, y: evento.clientY };
+  });
+  rMoldura.addEventListener('pointermove', function (evento) {
+    var antes = rToques[evento.pointerId];
+    if (!antes || !rEstado) return;
+    var ids = Object.keys(rToques);
+    if (ids.length === 2) {
+      var outro = rToques[String(ids[0]) === String(evento.pointerId) ? ids[1] : ids[0]];
+      var d0 = Math.hypot(antes.x - outro.x, antes.y - outro.y);
+      var d1 = Math.hypot(evento.clientX - outro.x, evento.clientY - outro.y);
+      var caixa = rMoldura.getBoundingClientRect();
+      if (d0 > 0) rEscala(rEstado.s * d1 / d0, (evento.clientX + outro.x) / 2 - caixa.left, (evento.clientY + outro.y) / 2 - caixa.top);
+    } else {
+      rEstado.x += evento.clientX - antes.x;
+      rEstado.y += evento.clientY - antes.y;
+      rAplicar();
+    }
+    rToques[evento.pointerId] = { x: evento.clientX, y: evento.clientY };
+  });
+  ['pointerup', 'pointercancel'].forEach(function (nome) {
+    rMoldura.addEventListener(nome, function (evento) { delete rToques[evento.pointerId]; });
+  });
+  var rFila = Promise.resolve();
+  function enquadrar(arquivo, conta) {
+    // Uma janela por vez: várias fotos escolhidas juntas abrem em sequência.
+    var vez = rFila.then(function () { return abrirRecorte(arquivo, conta); });
+    rFila = vez.catch(function () {});
+    return vez;
+  }
+  function abrirRecorte(arquivo, conta) {
+    return new Promise(function (resolver) {
+      var url = URL.createObjectURL(arquivo);
+      $('#recorte-conta').textContent = conta || '';
+      $('#recorte-conta').hidden = !conta;
+      rImagem.onload = function () {
+        recorte.showModal();
+        var W = rMoldura.clientWidth, H = rMoldura.clientHeight;
+        var iw = rImagem.naturalWidth, ih = rImagem.naturalHeight;
+        var conter = Math.min(W / iw, H / ih), cobrir = Math.max(W / iw, H / ih);
+        rEstado = { W: W, H: H, iw: iw, ih: ih, s: cobrir, x: 0, y: 0, min: conter * 0.6, max: cobrir * 4, cobrir: cobrir, conter: conter };
+        rCentralizar(cobrir, FOTO_FOCO_Y);
+      };
+      rImagem.onerror = function () { fim(null); };
+      rImagem.src = url;
+      function fim(valor) {
+        recorte.removeEventListener('click', aoClicar);
+        recorte.removeEventListener('cancel', aoCancelar);
+        if (recorte.open) recorte.close();
+        rEstado = null;
+        rToques = {};
+        URL.revokeObjectURL(url);
+        resolver(valor);
+      }
+      function aoCancelar(evento) { evento.preventDefault(); fim(null); }
+      function aoClicar(evento) {
+        var botao = evento.target.closest('[data-recorte]');
+        if (!botao || !rEstado) return;
+        var acao = botao.dataset.recorte;
+        if (acao === 'inteira') { rCentralizar(rEstado.conter, 0.5); return; }
+        if (acao === 'preencher') { rCentralizar(rEstado.cobrir, FOTO_FOCO_Y); return; }
+        if (acao === 'cancelar') { fim(null); return; }
+        var e = rEstado;
+        var k = FOTO_LARGURA / e.W;
+        var tela = document.createElement('canvas');
+        tela.width = FOTO_LARGURA;
+        tela.height = Math.round(FOTO_LARGURA / FOTO_PROPORCAO);
+        var pincel = tela.getContext('2d');
+        pincel.fillStyle = '#ffffff';
+        pincel.fillRect(0, 0, tela.width, tela.height);
+        pincel.imageSmoothingQuality = 'high';
+        pincel.drawImage(rImagem, e.x * k, e.y * k, e.iw * e.s * k, e.ih * e.s * k);
+        botao.disabled = true;
+        gerarBlob(tela, 'image/webp').then(function (blob) {
+          return blob.type === 'image/webp' ? blob : gerarBlob(tela, 'image/jpeg');
+        }).then(function (blob) {
+          botao.disabled = false;
+          var nome = (arquivo.name || 'foto').replace(/\.[^.]+$/, '') + (blob.type === 'image/webp' ? '.webp' : '.jpg');
+          fim(new File([blob], nome, { type: blob.type }));
+        }, function () { botao.disabled = false; fim(null); });
+      }
+      recorte.addEventListener('click', aoClicar);
+      recorte.addEventListener('cancel', aoCancelar);
+    });
+  }
   function gerarBlob(tela, tipo) {
     return new Promise(function (resolver, rejeitar) {
       tela.toBlob(function (blob) { blob ? resolver(blob) : rejeitar(new Error('foto')); }, tipo, 0.84);
