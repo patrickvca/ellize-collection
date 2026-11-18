@@ -59,6 +59,26 @@ async function cidadeDoPedido(pedido: any) {
   return await buscarCep(pedido.cep);
 }
 
+// O Mercado Pago só aceita a sigla do estado (BA); o formulário do boleto pode mandar o nome (Bahia).
+const ESTADOS: Record<string, string> = {
+  acre: 'AC', alagoas: 'AL', amapa: 'AP', amazonas: 'AM', bahia: 'BA', ceara: 'CE', 'distrito federal': 'DF',
+  'espirito santo': 'ES', goias: 'GO', maranhao: 'MA', 'mato grosso': 'MT', 'mato grosso do sul': 'MS',
+  'minas gerais': 'MG', para: 'PA', paraiba: 'PB', parana: 'PR', pernambuco: 'PE', piaui: 'PI',
+  'rio de janeiro': 'RJ', 'rio grande do norte': 'RN', 'rio grande do sul': 'RS', rondonia: 'RO', roraima: 'RR',
+  'santa catarina': 'SC', 'sao paulo': 'SP', sergipe: 'SE', tocantins: 'TO',
+};
+const SIGLAS = new Set(Object.values(ESTADOS));
+function siglaUf(...valores: unknown[]) {
+  for (const valor of valores) {
+    const texto = String(valor || '').trim();
+    if (!texto) continue;
+    if (SIGLAS.has(texto.toUpperCase())) return texto.toUpperCase();
+    const nome = texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    if (ESTADOS[nome]) return ESTADOS[nome];
+  }
+  return '';
+}
+
 // deno-lint-ignore no-explicit-any
 function pagamentoDaOrder(order: any) { return order?.transactions?.payments?.[0] || {}; }
 
@@ -169,7 +189,7 @@ Deno.serve(async (req) => {
         street_number: doFormulario.street_number || partes.number || 'S/N',
         neighborhood: doFormulario.neighborhood || partes.district || viaCep?.bairro || 'Não informado',
         city: doFormulario.city || partes.city || viaCep?.localidade || '',
-        state: doFormulario.federal_unit || doFormulario.state || partes.state || viaCep?.uf || '',
+        state: siglaUf(doFormulario.federal_unit, doFormulario.state, partes.state, viaCep?.uf),
       };
     }
 
