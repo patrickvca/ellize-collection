@@ -1232,7 +1232,8 @@
     var esperaPix = null;
     var METODOS = {
       pix: { bankTransfer: 'all' },
-      cartao: { creditCard: 'all', debitCard: 'all' },
+      // Só crédito: o único débito do Mercado Pago aqui é o Débito Virtual CAIXA, que a loja não quer oferecer.
+      cartao: { creditCard: 'all' },
       boleto: { ticket: 'all' }
     };
     var RECUSAS = {
@@ -1244,9 +1245,9 @@
       cc_rejected_duplicated_payment: 'Este pagamento já foi feito.'
     };
     var DESCRICOES = {
-      pix: 'Aprovação na hora, com o valor do Pix.',
-      cartao: 'Crédito ou débito, em parcelas conforme o Mercado Pago.',
-      boleto: 'Com o valor do Pix. Pode levar alguns dias para compensar.'
+      pix: 'Confirmação na hora.',
+      cartao: 'Confirmação na hora.',
+      boleto: 'Confirmação em até 3 dias úteis.'
     };
     sb.auth.getSession().then(function (r) {
       if (r.data.session) emailCliente = r.data.session.user.email || '';
@@ -1283,9 +1284,9 @@
         : '';
       alvo.innerHTML = '<div class="pagamento-grade"><form class="formulario" id="form-pagamento" novalidate>' + aviso +
         '<fieldset class="formas"><legend>Como você quer pagar o pedido #' + esc(o.number) + '?</legend>' +
-        ['pix', 'cartao', 'boleto'].map(function (forma) {
+        ['pix', 'boleto', 'cartao'].map(function (forma) {
           return '<label class="forma"><input type="radio" name="forma" value="' + forma + '">' +
-            '<span class="forma-nome">' + (forma === 'cartao' ? 'Cartão de crédito ou débito' : FORMAS[forma]) + '<small>' + DESCRICOES[forma] + '</small></span>' +
+            '<span class="forma-nome">' + (forma === 'cartao' ? 'Cartão de crédito' : FORMAS[forma]) + '<small>' + DESCRICOES[forma] + '</small></span>' +
             '<strong class="forma-valor">' + dinheiro(valor(o, forma)) + '</strong></label>';
         }).join('') + '</fieldset>' +
         '<p class="mensagem mensagem-erro" id="erro-pagamento" role="alert" hidden></p>' +
